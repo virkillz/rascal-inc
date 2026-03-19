@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark mode (default) — RGB channels for opacity-modifier support */
+    --s0: 10 10 15;
+    --s1: 17 17 24;
+    --s2: 24 24 31;
+    --s3: 34 34 48;
+    --border: #2a2a3a;
+    --accent: 124 106 247;
+    --muted: #6b7280;
+    --subtle: #9ca3af;
+    --text-primary: #ffffff;
+  }
+
+  html.light {
+    --s0: 245 244 255;
+    --s1: 255 255 255;
+    --s2: 238 236 252;
+    --s3: 227 225 245;
+    --border: #d0ceea;
+    --muted: #8886a6;
+    --subtle: #6662a0;
+    --text-primary: #0f0e1a;
+  }
+
+  html, body {
+    @apply bg-surface-0 antialiased;
+    color: var(--text-primary);
+    height: 100%;
+  }
+
+  #root {
+    height: 100%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  /* In light mode, white text switches to the themed primary color */
+  html.light .text-white {
+    color: var(--text-primary);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-3 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-border rounded-full;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm placeholder-muted
+           focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors;
+    color: var(--text-primary);
+  }
+  .btn-primary {
+    @apply bg-accent hover:bg-accent-dim text-white font-medium px-4 py-2 rounded-lg text-sm
+           transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply hover:bg-surface-3 px-3 py-2 rounded-lg text-sm transition-colors;
+    color: var(--subtle);
+  }
+  .btn-ghost:hover {
+    color: var(--text-primary);
+  }
+  .card {
+    @apply bg-surface-1 border border-border rounded-xl;
+  }
+}
