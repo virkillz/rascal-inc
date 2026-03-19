@@ -2,19 +2,24 @@ import { useState } from 'react'
 import { api, type Provider } from '../api.ts'
 import { useStore } from '../store.ts'
 
-type Step = 'company' | 'provider' | 'start'
+
+type Step = 'company' | 'provider' | 'account' | 'start'
 
 interface OnboardingProps {
   onComplete: () => void
 }
 
-export default function Onboarding({ onComplete }: OnboardingProps) {
-  const [step, setStep] = useState<Step>('company')
-  const [companyName, setCompanyName] = useState('')
+export default function Onboarding({ onComplete, startAtAccount }: OnboardingProps & { startAtAccount?: boolean }) {
+  const { settings } = useStore()
+  const [step, setStep] = useState<Step>(startAtAccount ? 'account' : 'company')
+  const [companyName, setCompanyName] = useState(startAtAccount ? (settings?.companyName ?? '') : '')
   const [companyMission, setCompanyMission] = useState('')
   const [providers, setProviders] = useState<Provider[]>([])
   const [selectedProvider, setSelectedProvider] = useState<string>('openrouter')
   const [apiKey, setApiKey] = useState('')
+  const [adminUsername, setAdminUsername] = useState('')
+  const [adminDisplayName, setAdminDisplayName] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const { updateSettings } = useStore()
@@ -41,6 +46,27 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setError('')
     try {
       await api.settings.saveProviderKey(selectedProvider, apiKey.trim())
+      setStep('account')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Something went wrong')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCreateAccount() {
+    if (!adminUsername.trim()) { setError('Username required'); return }
+    if (!adminDisplayName.trim()) { setError('Display name required'); return }
+    if (!adminPassword) { setError('Password required'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await api.auth.setup({
+        username: adminUsername.trim(),
+        displayName: adminDisplayName.trim(),
+        password: adminPassword,
+        companyName: companyName.trim(),
+      })
       setStep('start')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -73,12 +99,12 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
         {/* Step indicators */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          {(['company', 'provider', 'start'] as Step[]).map((s, i) => (
+          {(['company', 'provider', 'account', 'start'] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full transition-colors ${
                 s === step ? 'bg-accent' : steps_done(s, step) ? 'bg-accent/40' : 'bg-surface-3'
               }`} />
-              {i < 2 && <div className="w-6 h-px bg-surface-3" />}
+              {i < 3 && <div className="w-6 h-px bg-surface-3" />}
             </div>
           ))}
         </div>
@@ -125,34 +151,46 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         {/* ── Step 2: Provider ── */}
         {step === 'provider' && (
           <div className="card p-6 space-y-5">
-            <div>
-              <h1 className="text-xl font-semibold text-white">Connect a provider</h1>
-              <p className="text-sm text-muted mt-1">Your agents need an LLM provider to think.</p>
+            <div className="flex items-center gap-3">
+              <button
+                className="text-muted hover:text-white transition-colors text-sm"
+                onClick={() => { setError(''); setStep('company') }}
+              >
+                ← Back
+              </button>
+              <div>
+                <h1 className="text-xl font-semibold text-white">Connect a provider</h1>
+                <p className="text-sm text-muted mt-0.5">Your agents need an LLM provider to think.</p>
+              </div>
             </div>
 
             {recommended && (
-              <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 space-y-3">
+              <button
+                className={`w-full text-left bg-accent/10 border rounded-lg p-4 space-y-2 transition-colors ${
+                  selectedProvider === recommended.id ? 'border-accent/60' : 'border-accent/20 hover:border-accent/40'
+                }`}
+                onClick={() => { setSelectedProvider(recommended.id); setApiKey('') }}
+              >
                 <div className="flex items-center gap-2">
                   <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">Recommended</span>
                   <span className="text-sm font-medium text-white">{recommended.label}</span>
                 </div>
                 <p className="text-xs text-muted">One API key gives access to 240+ models from every major lab.</p>
                 {selectedProvider === recommended.id && (
-                  <div>
-                    <input
-                      className="input text-xs"
-                      type="password"
-                      placeholder="sk-or-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
+                  <input
+                    className="input text-xs mt-1"
+                    type="password"
+                    placeholder="sk-or-..."
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    autoFocus
+                  />
                 )}
-              </div>
+              </button>
             )}
 
-            {/* Other providers collapsible */}
+            {/* Other providers */}
             <details className="group">
               <summary className="text-xs text-muted cursor-pointer hover:text-subtle list-none flex items-center gap-1 select-none">
                 <span className="group-open:rotate-90 transition-transform">▶</span>
@@ -190,7 +228,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             <div className="flex gap-2">
               <button
                 className="btn-ghost flex-1 text-center"
-                onClick={() => setStep('start')}
+                onClick={() => { setError(''); setStep('account') }}
               >
                 Skip for now
               </button>
@@ -201,7 +239,66 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           </div>
         )}
 
-        {/* ── Step 3: How to start ── */}
+        {/* ── Step 3: Admin account ── */}
+        {step === 'account' && (
+          <div className="card p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              {!startAtAccount && (
+                <button
+                  className="text-muted hover:text-white transition-colors text-sm"
+                  onClick={() => { setError(''); setStep('provider') }}
+                >
+                  ← Back
+                </button>
+              )}
+              <div>
+                <h1 className="text-xl font-semibold text-white">Create your account</h1>
+                <p className="text-sm text-muted mt-0.5">You'll use this to log in as the platform admin.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-subtle mb-1.5">Username *</label>
+                <input
+                  className="input"
+                  placeholder="admin"
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-subtle mb-1.5">Display name *</label>
+                <input
+                  className="input"
+                  placeholder="Your name"
+                  value={adminDisplayName}
+                  onChange={(e) => setAdminDisplayName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-subtle mb-1.5">Password *</label>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Choose a password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateAccount()}
+                />
+              </div>
+            </div>
+
+            {error && <p className="text-red-400 text-xs">{error}</p>}
+
+            <button className="btn-primary w-full" onClick={handleCreateAccount} disabled={saving}>
+              {saving ? 'Creating...' : 'Create account & continue'}
+            </button>
+          </div>
+        )}
+
+        {/* ── Step 4: How to start ── */}
         {step === 'start' && (
           <div className="card p-6 space-y-5">
             <div>
@@ -237,6 +334,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 }
 
 function steps_done(s: Step, current: Step): boolean {
-  const order: Step[] = ['company', 'provider', 'start']
+  const order: Step[] = ['company', 'provider', 'account', 'start']
   return order.indexOf(s) < order.indexOf(current)
 }

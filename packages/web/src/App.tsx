@@ -49,11 +49,14 @@ export default function App() {
     )
   }
 
-  // First-run setup wizard (no users exist yet)
-  if (settings?.firstRun) {
+  // First-run setup wizard (no company name set OR no users exist yet)
+  if (settings?.firstRun || settings?.needsSetup) {
     return (
       <ThemeProvider>
-        <Onboarding onComplete={() => loadSettings()} />
+        <Onboarding
+          onComplete={() => loadSettings()}
+          startAtAccount={!settings.firstRun && settings.needsSetup}
+        />
       </ThemeProvider>
     )
   }

@@ -18,6 +18,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 export interface Settings {
   firstRun: boolean
+  needsSetup: boolean
   companyName: string
   companyMission: string
   defaultModel: { provider: string; modelId: string; thinkingLevel: string }

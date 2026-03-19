@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=packages/server & npm run dev --workspace=packages/web",
-    "build": "npm run build --workspace=packages/server && npm run build --workspace=packages/web"
+    "build": "npm run build --workspace=packages/server && npm run build --workspace=packages/web",
+    "reset": "rm -rf data/rascal.db data/rascal.db-shm data/rascal.db-wal data/sessions && echo 'Database reset. Run npm run dev to start fresh.'"
   }
 }

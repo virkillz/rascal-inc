@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { getSetting, setSetting } from '../db.js'
+import { getDb, getSetting, setSetting } from '../db.js'
 import { getModel } from '@mariozechner/pi-ai'
 
 const PROVIDERS = [
@@ -66,8 +66,10 @@ export function createSettingsRouter(): Router {
 
   // GET /api/settings — company info + first-run flag
   router.get('/', (_req, res) => {
+    const userCount = (getDb().prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c
     res.json({
       firstRun: getSetting('company_name') === null,
+      needsSetup: userCount === 0,
       companyName: getSetting('company_name') ?? '',
       companyMission: getSetting('company_mission') ?? '',
       defaultModel: getSetting('default_model')
