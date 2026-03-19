@@ -12,6 +12,10 @@ import { createMemoryRouter } from './api/memory.js'
 import { createTodosRouter } from './api/todos.js'
 import { createSchedulesRouter } from './api/schedules.js'
 import { createWorkspaceRouter } from './api/workspace.js'
+import { createTemplatesRouter } from './api/templates.js'
+import { createPluginsRouter } from './api/plugins.js'
+import { createGatesRouter } from './api/gates.js'
+import { createPipelineRouter } from './api/pipeline.js'
 
 export function createApp(opts: { webDistDir?: string; workspaceDir?: string } = {}) {
   const app = express()
@@ -26,6 +30,10 @@ export function createApp(opts: { webDistDir?: string; workspaceDir?: string } =
   app.use('/api/agents', createTodosRouter())
   app.use('/api/agents', createSchedulesRouter())
   app.use('/api/workspace', createWorkspaceRouter(opts.workspaceDir ?? process.cwd()))
+  app.use('/api/templates', createTemplatesRouter())
+  app.use('/api/plugins', createPluginsRouter())
+  app.use('/api/gates', createGatesRouter())
+  app.use('/api/projects', createPipelineRouter())
 
   // Health check
   app.get('/api/health', (_req, res) => res.json({ ok: true }))

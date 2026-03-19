@@ -85,6 +85,49 @@ function runMigrations(db: DB): void {
       next_run_at  TEXT,
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- ── Phase 3: Template system ──────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS templates (
+      id           TEXT PRIMARY KEY,
+      display_name TEXT    NOT NULL,
+      version      TEXT    NOT NULL,
+      description  TEXT    NOT NULL DEFAULT '',
+      manifest     TEXT    NOT NULL,
+      installed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      is_active    INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS plugins (
+      id           TEXT PRIMARY KEY,
+      display_name TEXT    NOT NULL,
+      description  TEXT    NOT NULL DEFAULT '',
+      configured   INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS pipeline_projects (
+      id          TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL,
+      name        TEXT NOT NULL DEFAULT '',
+      status      TEXT NOT NULL DEFAULT 'idle',
+      state       TEXT NOT NULL DEFAULT '{}',
+      input       TEXT NOT NULL DEFAULT '{}',
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS human_gates (
+      id          TEXT PRIMARY KEY,
+      project_id  TEXT NOT NULL,
+      gate_id     TEXT NOT NULL,
+      description TEXT NOT NULL,
+      artifact    TEXT,
+      status      TEXT NOT NULL DEFAULT 'pending',
+      decision    TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      decided_at  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_human_gates_project ON human_gates(project_id, status);
   `)
 }
 
@@ -142,4 +185,46 @@ export function getAgentTodos(agentId: string, onlyOpen = false): TodoRow[] {
     ? 'SELECT * FROM agent_todos WHERE agent_id = ? AND completed = 0 ORDER BY created_at ASC'
     : 'SELECT * FROM agent_todos WHERE agent_id = ? ORDER BY created_at ASC'
   return getDb().prepare(query).all(agentId) as unknown as TodoRow[]
+}
+
+// ── Phase 3 row types ─────────────────────────────────────────────────────────
+
+export interface TemplateRow {
+  id: string
+  display_name: string
+  version: string
+  description: string
+  manifest: string   // JSON
+  installed_at: string
+  is_active: number  // 0 | 1
+}
+
+export interface PluginRow {
+  id: string
+  display_name: string
+  description: string
+  configured: number  // 0 | 1
+}
+
+export interface PipelineProjectRow {
+  id: string
+  template_id: string
+  name: string
+  status: string
+  state: string   // JSON
+  input: string   // JSON
+  created_at: string
+  updated_at: string
+}
+
+export interface HumanGateRow {
+  id: string
+  project_id: string
+  gate_id: string
+  description: string
+  artifact: string | null  // JSON
+  status: string           // 'pending' | 'decided'
+  decision: string | null  // JSON
+  created_at: string
+  decided_at: string | null
 }

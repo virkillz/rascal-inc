@@ -118,6 +118,47 @@ export const api = {
     delete: (filePath: string) =>
       req<{ ok: boolean }>('DELETE', `/workspace?path=${encodeURIComponent(filePath)}`),
   },
+
+  // ─── Templates ────────────────────────────────────────────────────────────
+
+  templates: {
+    list: () => req<Template[]>('GET', '/templates'),
+    get: (id: string) => req<Template>('GET', `/templates/${id}`),
+    install: (dir: string) =>
+      req<{ template: Template; missingPlugins: string[] }>('POST', '/templates/install', { dir }),
+    activate: (id: string) => req<{ ok: boolean; activeTemplateId: string }>('POST', `/templates/${id}/activate`),
+    uninstall: (id: string) => req<{ ok: boolean }>('DELETE', `/templates/${id}`),
+  },
+
+  // ─── Plugins ──────────────────────────────────────────────────────────────
+
+  plugins: {
+    list: () => req<Plugin[]>('GET', '/plugins'),
+    configure: (id: string, apiKey: string) => req<{ ok: boolean }>('POST', `/plugins/${id}/configure`, { apiKey }),
+    removeConfigure: (id: string) => req<{ ok: boolean }>('DELETE', `/plugins/${id}/configure`),
+  },
+
+  // ─── Human Gates ──────────────────────────────────────────────────────────
+
+  gates: {
+    list: (status: 'pending' | 'all' = 'pending') => req<HumanGate[]>('GET', `/gates?status=${status}`),
+    listByProject: (projectId: string) => req<HumanGate[]>('GET', `/gates/project/${projectId}`),
+    decide: (id: string, action: 'approve' | 'revise' | 'reject', feedback?: string) =>
+      req<{ ok: boolean; resolved: boolean }>('POST', `/gates/${id}/decide`, { action, feedback }),
+  },
+
+  // ─── Pipeline Projects ────────────────────────────────────────────────────
+
+  projects: {
+    list: () => req<PipelineProject[]>('GET', '/projects'),
+    get: (id: string) => req<PipelineProject>('GET', `/projects/${id}`),
+    create: (data: { templateId: string; name?: string; input?: unknown }) =>
+      req<PipelineProject>('POST', '/projects', data),
+    start: (id: string) => req<{ ok: boolean }>('POST', `/projects/${id}/start`),
+    pause: (id: string) => req<{ ok: boolean }>('POST', `/projects/${id}/pause`),
+    getState: (id: string) => req<PipelineState>('GET', `/projects/${id}/state`),
+    delete: (id: string) => req<{ ok: boolean }>('DELETE', `/projects/${id}`),
+  },
 }
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -189,4 +230,67 @@ export interface FileEntry {
   uploaded_by: string | null
   created_at: string
   updated_at: string
+}
+
+export interface Template {
+  id: string
+  display_name: string
+  version: string
+  description: string
+  manifest: TemplateManifest
+  installed_at: string
+  isActive: boolean
+}
+
+export interface TemplateManifest {
+  id: string
+  version: string
+  displayName: string
+  description?: string
+  requiredPlugins: string[]
+  optionalPlugins?: string[]
+  agents: Array<{ id: string; name: string; role: string; isPipelineController?: boolean }>
+  pipeline?: { type: 'staged' | 'freeform'; entryFile: string }
+  uiPanels?: Array<{ id: string; displayName: string; slot: string }>
+}
+
+export interface Plugin {
+  id: string
+  display_name: string
+  description: string
+  configured: boolean
+  envKey: string | null
+  hasKey: boolean
+}
+
+export interface HumanGate {
+  id: string
+  project_id: string
+  gate_id: string
+  description: string
+  artifact: unknown | null
+  status: 'pending' | 'decided'
+  decision: { action: 'approve' | 'revise' | 'reject'; feedback?: string } | null
+  created_at: string
+  decided_at: string | null
+}
+
+export interface PipelineProject {
+  id: string
+  template_id: string
+  name: string
+  status: 'idle' | 'running' | 'paused' | 'completed' | 'failed'
+  state: PipelineState
+  input: unknown
+  created_at: string
+  updated_at: string
+}
+
+export interface PipelineState {
+  projectId: string
+  currentStage: string
+  stages: Record<string, 'pending' | 'in-progress' | 'awaiting-approval' | 'complete' | 'failed' | 'cancelled'>
+  activeAgentId?: string
+  errors: Array<{ stage?: string; message: string; timestamp: string }>
+  waitingForGate?: { gateId: string; description: string }
 }

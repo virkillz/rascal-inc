@@ -7,6 +7,9 @@ import Roster from './pages/Roster.tsx'
 import AgentChat from './pages/AgentChat.tsx'
 import Settings from './pages/Settings.tsx'
 import Workspace from './pages/Workspace.tsx'
+import Templates from './pages/Templates.tsx'
+import Plugins from './pages/Plugins.tsx'
+import Pipeline from './pages/Pipeline.tsx'
 import Layout from './components/Layout.tsx'
 
 export default function App() {
@@ -48,6 +51,9 @@ export default function App() {
             <Route path="/agents/:id" element={<AgentChat />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/workspace" element={<Workspace />} />
+            <Route path="/templates" element={<Templates />} />
+            <Route path="/plugins" element={<Plugins />} />
+            <Route path="/pipeline" element={<Pipeline />} />
           </Route>
         </Routes>
       </BrowserRouter>

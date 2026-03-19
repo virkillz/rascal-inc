@@ -6,6 +6,8 @@ import chalk from 'chalk'
 import { initDb } from './db.js'
 import { setDataDir } from './agent-runner.js'
 import { setEnvFilePath } from './api/settings.js'
+import { setPluginsEnvFilePath, seedBuiltInPlugins } from './api/plugins.js'
+import { setTemplatesWorkspaceDir } from './api/templates.js'
 import { startServer } from './server.js'
 import { startScheduler } from './scheduler.js'
 
@@ -76,6 +78,9 @@ async function cmdStart() {
   initDb(DATA_DIR)
   setDataDir(DATA_DIR)
   setEnvFilePath(ENV_FILE)
+  setPluginsEnvFilePath(ENV_FILE)
+  setTemplatesWorkspaceDir(WORKSPACE_DIR)
+  seedBuiltInPlugins()
   startScheduler()
 
   // Resolve web dist — look relative to this file in production
