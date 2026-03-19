@@ -1,6 +1,8 @@
 # How to Create a Template for rascal-inc
 
-A **template** is a TypeScript package that brings a domain-specific agent team, pipeline, and UI to the rascal-inc platform. The platform runs the template; the template never runs standalone.
+A **template** is a knowledge + process package that brings a domain-specific agent team and pipeline to the rascal-inc platform. The platform runs the template; the template never runs standalone.
+
+Templates own **who** the agents are, **what they know**, and **how they work together**. All external capabilities (APIs, rendering engines, services) are provided by **plugins** — templates never implement tools.
 
 ---
 
@@ -16,13 +18,17 @@ my-template/
 │   └── bob.config.json
 ├── pipeline/
 │   └── index.ts           # Exports a class implementing PipelineRunner
-├── tools/
-│   └── my-tool.ts         # Optional domain-specific tool definitions
+├── schemas/
+│   ├── project-brief.ts   # TypeScript interface for pipeline input data
+│   └── scene-manifest.ts  # TypeScript interface for inter-stage data
+├── sops/
+│   └── production.md      # Standard Operating Procedure — injected into pipeline controller
 ├── skills/
-│   └── domain-guide.md    # Optional template skill docs
+│   └── domain-guide.md    # Domain knowledge docs injected into agent prompts
 ├── ui/
 │   └── panels/
-│       └── PipelineView.tsx  # Optional custom React panels
+│       ├── PipelineView.tsx   # Optional custom React panels
+│       └── WorkspacePreview.tsx  # Optional iframe into agent-built workspace UI
 └── workspace/
     └── .gitkeep           # Starter workspace structure (copied on install)
 ```
@@ -42,8 +48,8 @@ Every template must have a `template.json` at its root.
 
   // Plugins the template needs. rascal-inc checks these on install and warns
   // for any that are not yet configured.
-  "requiredPlugins": ["elevenlabs", "youtube"],
-  "optionalPlugins": ["slack"],
+  "requiredPlugins": ["elevenlabs", "remotion"],
+  "optionalPlugins": ["youtube"],
 
   // Agent roster — one entry per agent
   "agents": [
@@ -68,6 +74,12 @@ Every template must have a `template.json` at its root.
   "pipeline": {
     "type": "staged",              // "staged" or "freeform"
     "entryFile": "pipeline/index.ts"
+  },
+
+  // Data schemas for pipeline stages (injected into relevant agent prompts)
+  "schemas": {
+    "projectBrief": "schemas/project-brief.ts",
+    "sceneManifest": "schemas/scene-manifest.ts"
   },
 
   // Optional custom React panels injected into the shell UI
@@ -100,7 +112,7 @@ All other fields are optional.
 
 ## 2. Agent system prompt (`agents/<name>.md`)
 
-Write the agent's system prompt in plain Markdown. You can reference the company context, the pipeline stage, or tool names.
+Write the agent's system prompt in plain Markdown. Reference the company context, pipeline stage, or tool names.
 
 ```markdown
 You are Alice, the Director of this production team.
@@ -127,7 +139,9 @@ Always think step-by-step before acting.
 {
   "defaultModel": "claude-sonnet-4-6",  // suggested model; user can override
   "tools": [
-    "pipeline-control"  // platform-provided tool IDs
+    "pipeline-control",    // platform-provided tool IDs
+    "elevenlabs_tts",      // plugin tool ID (from elevenlabs plugin)
+    "remotion_render"      // plugin tool ID (from remotion plugin)
   ],
   "skills": [
     "my-template/domain-guide"  // template skill paths (relative to skills/)
@@ -144,11 +158,107 @@ Always think step-by-step before acting.
 | `workspace-write` | Write files to the shared workspace |
 | `human-gate` | Create a human approval checkpoint |
 
-Plugin tools are exposed automatically when the plugin is configured. For example, with the `elevenlabs` plugin configured, the `elevenlabs-tts` tool becomes available.
+### Plugin tool IDs (built-in plugins)
+
+| Plugin | Tool IDs | Requires |
+|---|---|---|
+| `elevenlabs` | `elevenlabs_tts` | `ELEVENLABS_API_KEY` |
+| `gemini-image` | `gemini_generate_image` | `GEMINI_API_KEY` |
+| `youtube` | `youtube_search`, `youtube_upload` | `YOUTUBE_API_KEY`, `YOUTUBE_OAUTH_TOKEN` (upload only) |
+| `remotion` | `remotion_render`, `remotion_preview` | None (local) |
+
+Plugin tools become available automatically when the plugin is configured and the agent declares the tool ID in its config.
 
 ---
 
-## 4. PipelineRunner (`pipeline/index.ts`)
+## 4. Schemas (`schemas/<name>.ts`)
+
+Schemas define the data shape of artifacts flowing through your pipeline. They serve two purposes:
+1. **Agent context** — the schema source is injected into the relevant agent's system prompt so agents know exactly what shape to produce
+2. **Gate validation** — the platform validates artifacts against schemas at human gate transitions
+
+```ts
+// schemas/project-brief.ts
+export default interface ProjectBrief {
+  title: string
+  description: string
+  targetAudience: string
+  keyMessages: string[]
+  durationSeconds: number
+}
+```
+
+Declare schemas in `template.json`:
+```jsonc
+"schemas": {
+  "projectBrief": "schemas/project-brief.ts"
+}
+```
+
+---
+
+## 5. SOPs — Standard Operating Procedures (`sops/<name>.md`)
+
+SOPs are procedural playbooks injected into the pipeline controller agent's system prompt. They give the agent context for *why* the pipeline is ordered the way it is and what to do at each step.
+
+SOPs complement the `PipelineRunner` code — the code enforces order, the SOP guides agent behaviour within each stage.
+
+```markdown
+# Video Production SOP
+
+## When a new project arrives
+1. Read the project brief from `project-brief.json` in the workspace
+2. Run `youtube_search` to find 5–10 reference videos on the same topic
+3. Summarise key patterns from top-performing videos (title style, hook, pacing)
+4. Draft the scene manifest and write it to `scene-manifest.json`
+5. Create a `human_gate` for brief + manifest review before any media is generated
+
+## During production
+- Generate all images before requesting TTS audio — images define the scene timing
+- For each scene: generate image → generate audio → note duration → update manifest
+- Run `remotion_render` only after all scenes have media
+
+## Quality checklist before final gate
+- [ ] All scenes have an image and audio file
+- [ ] Total video duration is within ±10% of target
+- [ ] No placeholder text remains in the manifest
+```
+
+Assign an SOP in `agents/<name>.config.json`:
+```jsonc
+{
+  "skills": ["my-template/production-sop"]
+}
+```
+
+> **Skills vs SOPs:** Skills are domain knowledge ("here's how YouTube SEO works"). SOPs are procedural playbooks ("here's what to do and in what order"). Both are markdown files injected into the system prompt — the distinction is conceptual, helping template authors think clearly about what they're writing.
+
+---
+
+## 6. Skills (`skills/<name>.md`)
+
+Skills are domain knowledge documents injected into an agent's system prompt.
+
+```markdown
+# YouTube SEO Guide
+
+When writing titles and descriptions for YouTube videos, follow these rules:
+
+1. **Title**: 60 characters or fewer. Include the primary keyword in the first 5 words.
+2. **Description**: First 2 lines appear in search results — make them count.
+3. **Tags**: Use 10–15 tags. Mix broad and specific terms.
+```
+
+Assign a skill in `agents/<name>.config.json`:
+```jsonc
+{
+  "skills": ["my-template/youtube-seo"]
+}
+```
+
+---
+
+## 7. PipelineRunner (`pipeline/index.ts`)
 
 The pipeline runner is the heart of the template. rascal-inc calls `start()`, `pause()`, `resume()`, and `getState()` on it.
 
@@ -162,7 +272,6 @@ import { createHumanGate } from 'rascal-inc'
 import { useEventBus } from 'rascal-inc'
 import { useWorkspace } from 'rascal-inc'
 
-// In-memory state keyed by projectId
 const states = new Map<string, PipelineState>()
 
 export class MyPipeline implements PipelineRunner {
@@ -170,178 +279,53 @@ export class MyPipeline implements PipelineRunner {
     const events = useEventBus()
     const workspace = useWorkspace(projectId)
 
-    // Initialise state
     states.set(projectId, {
       projectId,
       currentStage: 'ideation',
-      stages: {
-        ideation: 'in-progress',
-        writing: 'pending',
-        review: 'pending',
-      },
+      stages: { ideation: 'in-progress', writing: 'pending', render: 'pending' },
       errors: [],
     })
 
     events.emit('pipeline:stage', { projectId, stage: 'ideation', status: 'in-progress' })
 
-    // --- Stage 1: ideation ---
-    // Run an agent, write output to workspace, advance stage…
-    await workspace.write('brief.json', { topic: (input as any).topic })
+    await workspace.write('project-brief.json', input)
 
-    // Create a human gate before the next stage
     const gate = createHumanGate({
       id: 'brief-approval',
       projectId,
-      description: 'Approve the creative brief before writing begins.',
-      artifact: { topic: (input as any).topic },
+      description: 'Approve the creative brief before production begins.',
+      artifact: input,
     })
+    const decision = await gate.wait()
+    if (decision.action === 'reject') return
 
-    states.get(projectId)!.waitingForGate = {
-      gateId: 'brief-approval',
-      description: 'Approve the creative brief.',
-    }
-    events.emit('pipeline:stage', { projectId, stage: 'ideation', status: 'awaiting-approval' })
-
-    const decision = await gate.wait()  // suspends here
-
-    if (decision.action === 'reject') {
-      states.get(projectId)!.stages.ideation = 'cancelled'
-      return
-    }
-
-    // --- Stage 2: writing ---
-    states.get(projectId)!.stages.ideation = 'complete'
-    states.get(projectId)!.currentStage = 'writing'
-    states.get(projectId)!.stages.writing = 'in-progress'
-    states.get(projectId)!.waitingForGate = undefined
-    events.emit('pipeline:stage', { projectId, stage: 'writing', status: 'in-progress' })
-
-    // … write stage logic here …
-
-    states.get(projectId)!.stages.writing = 'complete'
-    states.get(projectId)!.stages.review = 'complete'
-    states.get(projectId)!.currentStage = 'review'
+    // … continue stages …
   }
 
   async pause(projectId: string): Promise<void> {
-    // Nothing async needed for a simple in-memory runner.
-    // For long-running work, save a checkpoint here.
     const s = states.get(projectId)
     if (s) s.currentStage = 'paused'
   }
 
   async resume(projectId: string, gateId: string, decision: GateDecision): Promise<void> {
-    // Gate resolution is handled by human-gate-service automatically.
-    // This method is called by the platform if you need custom resume logic.
+    // Gate resolution handled by human-gate-service automatically
   }
 
   async getState(projectId: string): Promise<PipelineState> {
     return states.get(projectId) ?? {
-      projectId,
-      currentStage: 'idle',
-      stages: {},
-      errors: [],
+      projectId, currentStage: 'idle', stages: {}, errors: [],
     }
   }
 }
 
-// Export a factory function — the platform calls this
 export default () => new MyPipeline()
 ```
 
-### PipelineState shape
-
-```ts
-interface PipelineState {
-  projectId: string
-  currentStage: string
-  stages: Record<string, StageStatus>  // see below
-  activeAgentId?: string               // shown in the UI as "working"
-  errors: PipelineError[]
-  waitingForGate?: { gateId: string; description: string }
-}
-
-type StageStatus =
-  | 'pending'
-  | 'in-progress'
-  | 'awaiting-approval'
-  | 'complete'
-  | 'failed'
-  | 'cancelled'
-```
-
-### Important rules
-
-1. **Own your state.** The pipeline is responsible for persisting its state. Use `useWorkspace()` to write a `status.json` if you want to survive process restarts.
-2. **Emit events.** Emit `pipeline:stage` events whenever a stage changes so the UI reflects progress in real time.
-3. **Gates suspend execution.** `gate.wait()` returns a Promise that resolves only when the human clicks Approve/Revise/Reject in the notification center. The pipeline process is suspended until then.
-4. **Handle `pause()`.** The platform calls `pause()` on server shutdown. Save enough state to resume.
-
 ---
 
-## 5. Domain tools (`tools/<name>.ts`)
+## 8. Custom UI panels (`ui/panels/<Panel>.tsx`)
 
-Optional tools your agents can call. Uses the Pi SDK `ToolDefinition` format.
-
-```ts
-import type { ToolDefinition } from '@mariozechner/pi'
-
-export const searchYouTube: ToolDefinition = {
-  name: 'search_youtube',
-  description: 'Search YouTube for videos matching a query.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      query: { type: 'string', description: 'Search query' },
-      max_results: { type: 'number', description: 'Maximum results to return', default: 5 },
-    },
-    required: ['query'],
-  },
-  async execute({ query, max_results = 5 }) {
-    // implementation…
-    return { results: [] }
-  },
-}
-```
-
-Reference a tool in `agents/<name>.config.json` by the exported constant name, or register it in the template's pipeline with `defineAgent({ additionalTools: [searchYouTube] })`.
-
----
-
-## 6. Template skills (`skills/<name>.md`)
-
-Skills are instruction documents injected into an agent's system prompt. Write them as plain Markdown.
-
-```markdown
-# YouTube SEO Guide
-
-When writing titles and descriptions for YouTube videos, follow these rules:
-
-1. **Title**: 60 characters or fewer. Include the primary keyword in the first 5 words.
-2. **Description**: First 2 lines appear in search results — make them count.
-3. **Tags**: Use 10–15 tags. Mix broad and specific terms.
-4. **Thumbnail**: Ask Gemini to generate a thumbnail that uses high-contrast colours
-   and shows a human face where relevant.
-
-## Keyword research
-
-Use the `search_youtube` tool to find top-performing videos on the same topic.
-Analyse their titles and descriptions to extract winning patterns.
-```
-
-Assign a skill to an agent in `agents/<name>.config.json`:
-
-```jsonc
-{
-  "skills": ["my-template/youtube-seo"]
-}
-```
-
----
-
-## 7. Custom UI panels (`ui/panels/<Panel>.tsx`)
-
-Panels are React components rendered in slots defined in `template.json`. The platform provides the panel slot system; the template provides the component.
+Panels are React components rendered in slots defined in `template.json`.
 
 ```tsx
 // ui/panels/PipelineView.tsx
@@ -349,35 +333,50 @@ import { useStore } from 'rascal-inc/ui'
 
 export default function PipelineView() {
   const { projects } = useStore()
-  const project = projects[0]  // or filter by template
-
+  const project = projects[0]
   return (
     <div className="p-4">
-      <h2 className="font-bold mb-3">Pipeline</h2>
       {project
         ? Object.entries(project.state.stages).map(([stage, status]) => (
-            <div key={stage} className="flex items-center gap-2 text-sm mb-1">
-              <StatusDot status={status} />
-              <span className="capitalize">{stage}</span>
-            </div>
+            <div key={stage}>{stage}: {status}</div>
           ))
-        : <p className="text-gray-400">No active project.</p>
+        : <p>No active project.</p>
       }
     </div>
   )
 }
 ```
 
+### WorkspacePreview panel
+
+Agents with coding tools can build HTML/React apps inside their workspace. Use a `WorkspacePreview` panel to surface that UI in the shell:
+
+```tsx
+// ui/panels/WorkspacePreview.tsx
+export default function WorkspacePreview() {
+  // /api/workspace/preview/:templateId/* serves static files from workspace/<templateId>/
+  return (
+    <iframe
+      src="/api/workspace/preview/my-template/dashboard/index.html"
+      className="w-full h-full border-0"
+      title="Agent Dashboard"
+    />
+  )
+}
+```
+
+Agents can build and compile a dashboard into `workspace/<templateId>/dashboard/`. The platform serves it at `/api/workspace/preview/<templateId>/*`.
+
 Panel slots:
 | Slot | Description |
 |---|---|
-| `main` | Full-width content area (replaces or augments the default view) |
-| `agent-card` | Small panel shown below each agent card on the roster |
-| `sidebar` | Narrow panel injected into the left sidebar |
+| `main` | Full-width content area |
+| `agent-card` | Small panel below each agent card |
+| `sidebar` | Narrow panel in the left sidebar |
 
 ---
 
-## 8. Installing a template
+## 9. Installing a template
 
 During development, point the Template Manager at the directory:
 
@@ -396,12 +395,12 @@ curl -X POST http://localhost:3000/api/templates/install \
 
 The install flow:
 1. Reads and validates `template.json`
-2. Checks required plugins — warns if any are not configured
+2. Checks required plugins — warns if any are not yet configured
 3. Registers all template agents in the DB (`source: "template:my-template"`)
 4. Scaffolds `workspace/my-template/` from `workspaceStructure`
 5. Returns `{ template, missingPlugins }`
 
-**Activate** a template to make it the active pipeline (one active at a time):
+**Activate** a template to make it the active pipeline:
 
 ```bash
 curl -X POST http://localhost:3000/api/templates/my-template/activate
@@ -409,41 +408,35 @@ curl -X POST http://localhost:3000/api/templates/my-template/activate
 
 ---
 
-## 9. Plugin requirements
+## 10. Plugin requirements
 
-Templates declare which plugins they need in `requiredPlugins`. The platform checks this on install and shows a warning for each missing plugin.
+Templates declare which plugins they need in `requiredPlugins`. The platform checks this on install and shows a warning for each missing or unconfigured plugin.
 
-| Plugin ID | Service |
-|---|---|
-| `elevenlabs` | ElevenLabs TTS |
-| `gemini-image` | Gemini image generation |
-| `youtube` | YouTube upload |
-| `slack` | Slack messaging |
-| `notion` | Notion read/write |
-| `github` | GitHub repo operations |
-| `openai` | OpenAI / DALL-E |
-
-Configure plugins in the Plugin Manager (Settings → Plugins) or via:
+Configure plugins via the Plugin Manager (Settings → Plugins) or via:
 
 ```bash
+# Set an env var for a plugin
 curl -X POST http://localhost:3000/api/plugins/elevenlabs/configure \
   -H 'Content-Type: application/json' \
-  -d '{"apiKey": "your-key-here"}'
+  -d '{"key": "ELEVENLABS_API_KEY", "value": "your-key-here"}'
+
+# Check plugin health
+curl http://localhost:3000/api/plugins/elevenlabs/health
 ```
 
 ---
 
-## 10. Checklist before shipping
+## 11. Checklist before shipping
 
 - [ ] `template.json` has all required fields (`id`, `version`, `displayName`, `agents`)
 - [ ] Each agent has a `systemPromptFile` and `configFile` that exist on disk
-- [ ] `isPipelineController: true` is set on exactly one agent (the one that drives the pipeline)
+- [ ] `isPipelineController: true` is set on exactly one agent
+- [ ] All plugin tool IDs in agent configs are declared in `requiredPlugins`
 - [ ] `PipelineRunner` emits `pipeline:stage` events for each stage transition
 - [ ] `getState()` returns a valid `PipelineState` even before `start()` is called
-- [ ] Human gates have descriptive `description` strings (shown to the user in the notification center)
+- [ ] Schemas are TypeScript interfaces with an `export default` — no runtime code
+- [ ] SOPs are written from the agent's perspective (imperative: "do X, then Y")
 - [ ] `workspaceStructure` directory exists (even if empty with `.gitkeep`)
-- [ ] Required plugins are declared in `requiredPlugins`
-- [ ] Skills are factual and concise — they are injected verbatim into the system prompt
 
 ---
 
@@ -455,7 +448,8 @@ curl -X POST http://localhost:3000/api/plugins/elevenlabs/configure \
 | `agents/<name>.md` | **Yes** | System prompt per agent |
 | `agents/<name>.config.json` | **Yes** | Model, tools, skills per agent |
 | `pipeline/index.ts` | No* | Pipeline logic (required if `pipeline` key is in manifest) |
-| `tools/<name>.ts` | No | Domain-specific tools |
+| `schemas/<name>.ts` | No | Data shape for pipeline artifacts |
+| `sops/<name>.md` | No | Standard Operating Procedures for agents |
 | `skills/<name>.md` | No | Domain knowledge documents |
 | `ui/panels/<Panel>.tsx` | No | Custom React panels |
 | `workspace/` | No | Starter workspace files |

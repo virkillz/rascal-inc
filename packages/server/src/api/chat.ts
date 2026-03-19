@@ -54,6 +54,7 @@ export function createChatRouter(): Router {
         description: agent.description,
         system_prompt: agent.system_prompt,
         model_config: agent.model_config,
+        source: agent.source,
       }
 
       const reply = await chatWithAgent(agentRecord, message.trim(), getDefaultModel())

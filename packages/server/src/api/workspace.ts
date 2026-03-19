@@ -103,6 +103,30 @@ export function createWorkspaceRouter(workspaceDir: string): Router {
     res.status(201).json(entry)
   })
 
+  // GET /api/workspace/preview/:templateId/* — serve static files built by agents
+  // Agents can build HTML/React apps in workspace/<templateId>/dashboard/ and
+  // have them served here for display in custom UI panels.
+  router.get('/preview/:templateId/*', (req, res) => {
+    const templateId = req.params.templateId
+    const filePath = (req.params as Record<string, string>)[0] ?? 'index.html'
+
+    // Prevent path traversal
+    const safePath = filePath.split('/').filter((p) => p !== '..' && p !== '.').join('/')
+    const abs = path.join(workspaceDir, templateId, safePath)
+
+    if (!abs.startsWith(path.resolve(workspaceDir))) {
+      res.status(400).json({ error: 'Invalid path' })
+      return
+    }
+
+    if (!fs.existsSync(abs)) {
+      res.status(404).send('Not found')
+      return
+    }
+
+    res.sendFile(abs)
+  })
+
   // DELETE /api/workspace?path=...
   router.delete('/', (req, res) => {
     const relPath = req.query.path as string | undefined

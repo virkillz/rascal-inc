@@ -85,7 +85,7 @@ export function createTemplatesRouter(): Router {
         agentDef.role,
         '',
         agentPrompts[agentDef.id] ?? '',
-        JSON.stringify({ defaultModel: agentConfig.defaultModel }),
+        JSON.stringify({ defaultModel: agentConfig.defaultModel, tools: agentConfig.tools ?? [] }),
         `template:${manifest.id}`,
         randomColor(),
       )

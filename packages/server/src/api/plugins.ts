@@ -1,32 +1,8 @@
 import { Router } from 'express'
 import { getDb, type PluginRow } from '../db.js'
 import { eventBus } from '../event-bus.js'
+import { pluginLoader } from '../plugin-loader.js'
 import fs from 'fs'
-
-// ── Built-in plugin registry ──────────────────────────────────────────────────
-// These are the slots described in the PLAN. Actual tool implementations
-// would ship with plugin packages; for Phase 3 we register the slots so the
-// plugin manager UI can show them and allow key configuration.
-
-const BUILT_IN_PLUGINS: Omit<PluginRow, 'configured'>[] = [
-  { id: 'elevenlabs',    display_name: 'ElevenLabs',    description: 'Text-to-speech audio generation' },
-  { id: 'gemini-image',  display_name: 'Gemini Image',  description: 'Image generation via Google Gemini' },
-  { id: 'youtube',       display_name: 'YouTube',        description: 'Upload and manage YouTube videos' },
-  { id: 'slack',         display_name: 'Slack',          description: 'Send messages and notifications to Slack' },
-  { id: 'notion',        display_name: 'Notion',         description: 'Read and write Notion pages and databases' },
-  { id: 'github',        display_name: 'GitHub',         description: 'Manage repositories, issues, and pull requests' },
-  { id: 'openai',        display_name: 'OpenAI',         description: 'Direct access to OpenAI models and DALL-E' },
-]
-
-const ENV_KEY_MAP: Record<string, string> = {
-  elevenlabs:   'ELEVENLABS_API_KEY',
-  'gemini-image': 'GEMINI_API_KEY',
-  youtube:      'YOUTUBE_API_KEY',
-  slack:        'SLACK_BOT_TOKEN',
-  notion:       'NOTION_API_KEY',
-  github:       'GITHUB_TOKEN',
-  openai:       'OPENAI_API_KEY',
-}
 
 let _envFilePath = ''
 export function setPluginsEnvFilePath(p: string) { _envFilePath = p }
@@ -55,22 +31,20 @@ function writeEnvKey(key: string, value: string) {
   process.env[key] = value
 }
 
-/** Seed built-in plugin rows once on startup */
+function removeEnvKey(key: string) {
+  if (!_envFilePath || !fs.existsSync(_envFilePath)) return
+  let content = fs.readFileSync(_envFilePath, 'utf-8')
+  content = content.replace(new RegExp(`^${key}=.*\\n?`, 'm'), '')
+  fs.writeFileSync(_envFilePath, content)
+  delete process.env[key]
+}
+
+/**
+ * Seed plugin rows from the plugin loader registry.
+ * Replaces the old BUILT_IN_PLUGINS hardcoded array.
+ */
 export function seedBuiltInPlugins() {
-  const db = getDb()
-  const env = readEnv()
-  for (const plugin of BUILT_IN_PLUGINS) {
-    const envKey = ENV_KEY_MAP[plugin.id]
-    const isConfigured = envKey ? !!env[envKey] : 0
-    db.prepare(`
-      INSERT OR IGNORE INTO plugins (id, display_name, description, configured)
-      VALUES (?, ?, ?, ?)
-    `).run(plugin.id, plugin.display_name, plugin.description, isConfigured ? 1 : 0)
-    // Sync configured status in case key was added externally
-    if (envKey && isConfigured) {
-      db.prepare('UPDATE plugins SET configured = 1 WHERE id = ?').run(plugin.id)
-    }
-  }
+  pluginLoader.seedDb()
 }
 
 export function createPluginsRouter(): Router {
@@ -78,52 +52,112 @@ export function createPluginsRouter(): Router {
 
   // GET /api/plugins
   router.get('/', (_req, res) => {
-    const rows = getDb().prepare('SELECT * FROM plugins ORDER BY id ASC').all() as PluginRow[]
+    const rows = getDb().prepare('SELECT * FROM plugins ORDER BY id ASC').all() as unknown as PluginRow[]
     const env = readEnv()
-    res.json(rows.map(row => ({
-      ...row,
-      configured: row.configured === 1,
-      envKey: ENV_KEY_MAP[row.id] ?? null,
-      // Mask the actual key value for security — just show whether it's present
-      hasKey: !!(ENV_KEY_MAP[row.id] && env[ENV_KEY_MAP[row.id]]),
-    })))
+
+    res.json(rows.map((row) => {
+      const plugin = pluginLoader.get(row.id)
+      const envVars = plugin?.config.env ?? []
+      const hasAllRequired = envVars
+        .filter((e) => e.required)
+        .every((e) => !!env[e.key])
+
+      return {
+        ...row,
+        configured: row.configured === 1,
+        envVars: envVars.map((e) => ({
+          key: e.key,
+          required: e.required,
+          description: e.description,
+          hasValue: !!env[e.key],
+        })),
+        hasAllRequired,
+        toolIds: plugin?.config.toolIds ?? [],
+      }
+    }))
   })
 
-  // POST /api/plugins/:id/configure  — body: { apiKey: string }
-  router.post('/:id/configure', (req, res) => {
+  // POST /api/plugins/:id/configure  — body: { key: string, value: string }
+  // Supports setting any env var declared by the plugin (not just a single apiKey)
+  router.post('/:id/configure', async (req, res) => {
     const db = getDb()
-    const row = db.prepare('SELECT * FROM plugins WHERE id = ?').get(req.params.id) as PluginRow | undefined
+    const row = db.prepare('SELECT * FROM plugins WHERE id = ?').get(req.params.id) as unknown as PluginRow | undefined
     if (!row) return res.status(404).json({ error: 'Plugin not found' })
 
-    const { apiKey } = req.body as { apiKey?: string }
-    if (!apiKey?.trim()) return res.status(400).json({ error: '"apiKey" required' })
+    const { key, value } = req.body as { key?: string; value?: string }
+    if (!key?.trim() || !value?.trim()) {
+      return res.status(400).json({ error: '"key" and "value" are required' })
+    }
 
-    const envKey = ENV_KEY_MAP[row.id]
-    if (!envKey) return res.status(422).json({ error: `Plugin "${row.id}" does not use an API key` })
+    const plugin = pluginLoader.get(row.id)
+    const validKeys = plugin?.config.env.map((e) => e.key) ?? []
+    if (!validKeys.includes(key)) {
+      return res.status(422).json({
+        error: `"${key}" is not a declared env var for plugin "${row.id}". Valid keys: ${validKeys.join(', ')}`,
+      })
+    }
 
-    writeEnvKey(envKey, apiKey.trim())
-    db.prepare('UPDATE plugins SET configured = 1 WHERE id = ?').run(row.id)
+    writeEnvKey(key, value.trim())
+
+    // Recheck if all required vars are now set
+    const allConfigured = (plugin?.config.env ?? [])
+      .filter((e) => e.required)
+      .every((e) => !!process.env[e.key])
+
+    if (allConfigured) {
+      db.prepare('UPDATE plugins SET configured = 1 WHERE id = ?').run(row.id)
+      // Run setup if this plugin has one
+      pluginLoader.runSetup(row.id).catch((err) =>
+        console.warn(`  [plugin:${row.id}] setup() failed:`, err),
+      )
+    }
 
     eventBus.emit({ type: 'plugin:configured', pluginId: row.id })
-    res.json({ ok: true })
+    res.json({ ok: true, configured: allConfigured })
   })
 
-  // DELETE /api/plugins/:id/configure — remove the key
+  // DELETE /api/plugins/:id/configure?key=ENV_VAR_NAME — remove a single env var
   router.delete('/:id/configure', (req, res) => {
     const db = getDb()
-    const row = db.prepare('SELECT * FROM plugins WHERE id = ?').get(req.params.id) as PluginRow | undefined
+    const row = db.prepare('SELECT * FROM plugins WHERE id = ?').get(req.params.id) as unknown as PluginRow | undefined
     if (!row) return res.status(404).json({ error: 'Plugin not found' })
 
-    const envKey = ENV_KEY_MAP[row.id]
-    if (envKey && _envFilePath && fs.existsSync(_envFilePath)) {
-      let content = fs.readFileSync(_envFilePath, 'utf-8')
-      content = content.replace(new RegExp(`^${envKey}=.*\\n?`, 'm'), '')
-      fs.writeFileSync(_envFilePath, content)
-      delete process.env[envKey]
+    const key = req.query.key as string | undefined
+    const plugin = pluginLoader.get(row.id)
+    const validKeys = plugin?.config.env.map((e) => e.key) ?? []
+
+    if (key) {
+      // Remove a specific key
+      if (!validKeys.includes(key)) {
+        return res.status(422).json({ error: `"${key}" is not a declared env var for this plugin` })
+      }
+      removeEnvKey(key)
+    } else {
+      // Remove all keys for this plugin
+      for (const envVar of plugin?.config.env ?? []) {
+        removeEnvKey(envVar.key)
+      }
     }
 
     db.prepare('UPDATE plugins SET configured = 0 WHERE id = ?').run(row.id)
     res.json({ ok: true })
+  })
+
+  // GET /api/plugins/:id/health — run the plugin's health check
+  router.get('/:id/health', async (req, res) => {
+    const plugin = pluginLoader.get(req.params.id)
+    if (!plugin) return res.status(404).json({ error: 'Plugin not found' })
+
+    if (!plugin.healthCheck) {
+      return res.json({ ok: true, message: 'No health check defined for this plugin' })
+    }
+
+    try {
+      const result = await plugin.healthCheck()
+      res.json(result)
+    } catch (err) {
+      res.json({ ok: false, message: String(err) })
+    }
   })
 
   return router
