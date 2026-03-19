@@ -8,7 +8,6 @@ import { setDataDir } from './agent-runner.js'
 import { setEnvFilePath } from './api/settings.js'
 import { setPluginsEnvFilePath, seedBuiltInPlugins } from './api/plugins.js'
 import { pluginLoader } from './plugin-loader.js'
-import { setTemplatesWorkspaceDir } from './api/templates.js'
 import { startServer } from './server.js'
 import { startScheduler } from './scheduler.js'
 
@@ -80,8 +79,6 @@ async function cmdStart() {
   setDataDir(DATA_DIR)
   setEnvFilePath(ENV_FILE)
   setPluginsEnvFilePath(ENV_FILE)
-  setTemplatesWorkspaceDir(WORKSPACE_DIR)
-
   // Initialize plugin loader — must run after env vars are loaded and DB is ready
   pluginLoader.setWorkspaceDir(WORKSPACE_DIR)
   pluginLoader.init()

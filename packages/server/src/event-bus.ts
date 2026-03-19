@@ -1,15 +1,8 @@
-import type { MemoryRow, TodoRow, TemplateRow, HumanGateRow } from './db.js'
-
-export type StageStatus = 'pending' | 'in-progress' | 'awaiting-approval' | 'complete' | 'failed' | 'cancelled'
-
-export type GateDecision = {
-  action: 'approve' | 'revise' | 'reject'
-  feedback?: string
-}
+import type { MemoryRow, TodoRow } from './db.js'
 
 export type AppEvent =
   | { type: 'connected' }
-  // ── Agent events ────────────────────────────────────────────────────────────
+  // ── Agent events ─────────────────────────────────────────────────────────────
   | { type: 'agent:thinking'; agentId: string }
   | { type: 'agent:reply'; agentId: string; preview: string }
   | { type: 'agent:idle'; agentId: string }
@@ -21,21 +14,12 @@ export type AppEvent =
   | { type: 'memory:deleted'; agentId: string; entryId: number }
   | { type: 'schedule:fired'; agentId: string; scheduleId: number; label: string }
   | { type: 'workspace:change'; path: string; action: 'created' | 'updated' | 'deleted' }
-  // ── Template events ─────────────────────────────────────────────────────────
-  | { type: 'template:installed'; template: TemplateRow }
-  | { type: 'template:uninstalled'; templateId: string }
-  | { type: 'template:activated'; templateId: string }
-  // ── Plugin events ───────────────────────────────────────────────────────────
+  // ── Plugin events ─────────────────────────────────────────────────────────────
   | { type: 'plugin:configured'; pluginId: string }
-  // ── Pipeline events ─────────────────────────────────────────────────────────
-  | { type: 'pipeline:started'; projectId: string }
-  | { type: 'pipeline:stage'; projectId: string; stage: string; status: StageStatus }
-  | { type: 'pipeline:completed'; projectId: string }
-  | { type: 'pipeline:error'; projectId: string; error: string }
-  | { type: 'pipeline:paused'; projectId: string }
-  // ── Human gate events ───────────────────────────────────────────────────────
-  | { type: 'gate:created'; gate: HumanGateRow }
-  | { type: 'gate:decided'; gateId: string; decision: GateDecision }
+  // ── Board events ──────────────────────────────────────────────────────────────
+  | { type: 'board:card_moved'; cardId: string; boardId: string; laneId: string; title: string }
+  // ── Channel events ────────────────────────────────────────────────────────────
+  | { type: 'channel:message'; channelId: string; senderId: string; senderType: string; senderName: string; content: string; messageId: number }
 
 type Handler = (event: AppEvent) => void
 

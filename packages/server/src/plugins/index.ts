@@ -7,14 +7,16 @@
  * 3. Import and add it to builtInPlugins below
  */
 
+import { braveSearchPlugin } from './brave-search/index.js'
 import { elevenlabsPlugin } from './elevenlabs/index.js'
 import { geminiImagePlugin } from './gemini-image/index.js'
 import { youtubePlugin } from './youtube/index.js'
 import { remotionPlugin } from './remotion/index.js'
 
-export { elevenlabsPlugin, geminiImagePlugin, youtubePlugin, remotionPlugin }
+export { braveSearchPlugin, elevenlabsPlugin, geminiImagePlugin, youtubePlugin, remotionPlugin }
 
 export const builtInPlugins = [
+  braveSearchPlugin,
   elevenlabsPlugin,
   geminiImagePlugin,
   youtubePlugin,

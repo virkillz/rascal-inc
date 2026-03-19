@@ -30,7 +30,7 @@ export function createAgentsRouter(): Router {
 
   // GET /api/agents
   router.get('/', (_req, res) => {
-    const agents = getDb().prepare('SELECT * FROM agents ORDER BY created_at ASC').all() as AgentRow[]
+    const agents = getDb().prepare('SELECT * FROM agents ORDER BY created_at ASC').all() as unknown as AgentRow[]
     res.json(agents.map(row => ({
       ...row,
       modelConfig: JSON.parse(row.model_config || '{}'),
@@ -39,7 +39,7 @@ export function createAgentsRouter(): Router {
 
   // GET /api/agents/:id
   router.get('/:id', (req, res) => {
-    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as AgentRow | undefined
+    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRow | undefined
     if (!agent) return res.status(404).json({ error: 'Agent not found' })
     res.json({ ...agent, modelConfig: JSON.parse(agent.model_config || '{}') })
   })
@@ -71,13 +71,13 @@ export function createAgentsRouter(): Router {
       randomColor(),
     )
 
-    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(id) as AgentRow
+    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(id) as unknown as AgentRow
     res.status(201).json({ ...agent, modelConfig: JSON.parse(agent.model_config) })
   })
 
   // PUT /api/agents/:id
   router.put('/:id', (req, res) => {
-    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as AgentRow | undefined
+    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRow | undefined
     if (!agent) return res.status(404).json({ error: 'Agent not found' })
 
     const { name, role, description, systemPrompt, modelConfig, avatarColor } = req.body as {
@@ -112,15 +112,24 @@ export function createAgentsRouter(): Router {
     // Kill the live session so it picks up the new system prompt on next chat
     clearSession(agent.id)
 
-    const updated = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(agent.id) as AgentRow
+    const updated = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(agent.id) as unknown as AgentRow
     res.json({ ...updated, modelConfig: JSON.parse(updated.model_config) })
+  })
+
+  // POST /api/agents/:id/toggle-active — activate or deactivate agent
+  router.post('/:id/toggle-active', (req, res) => {
+    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRow | undefined
+    if (!agent) return res.status(404).json({ error: 'Agent not found' })
+    const newState = (agent as AgentRow & { is_active: number }).is_active ? 0 : 1
+    getDb().prepare("UPDATE agents SET is_active = ?, updated_at = datetime('now') WHERE id = ?").run(newState, agent.id)
+    if (!newState) clearSession(agent.id)
+    res.json({ id: agent.id, is_active: newState === 1 })
   })
 
   // DELETE /api/agents/:id
   router.delete('/:id', (req, res) => {
-    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as AgentRow | undefined
+    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRow | undefined
     if (!agent) return res.status(404).json({ error: 'Agent not found' })
-    if (agent.source !== 'user') return res.status(403).json({ error: 'Template agents cannot be deleted' })
 
     clearSession(agent.id)
     getDb().prepare('DELETE FROM agents WHERE id = ?').run(agent.id)

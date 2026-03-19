@@ -1,134 +1,105 @@
-import { useEffect, useRef, useState } from 'react'
-import { useStore } from '../store.ts'
+import { useRef, useState } from 'react'
 import { useAppEvents } from '../hooks/useAppEvents.ts'
-import type { HumanGate } from '../api.ts'
+import { useStore } from '../store.ts'
 
-function GateCard({ gate }: { gate: HumanGate }) {
-  const { decideGate } = useStore()
-  const [feedback, setFeedback] = useState('')
-  const [deciding, setDeciding] = useState<string | null>(null)
-
-  async function decide(action: 'approve' | 'revise' | 'reject') {
-    setDeciding(action)
-    try {
-      await decideGate(gate.id, action, feedback || undefined)
-    } finally {
-      setDeciding(null)
-    }
-  }
-
-  return (
-    <div className="bg-gray-800 border border-amber-700/50 rounded-xl p-4 space-y-3">
-      <div>
-        <p className="text-xs text-amber-400 font-medium uppercase tracking-wider mb-1">Awaiting decision</p>
-        <p className="text-sm font-medium">{gate.description}</p>
-        <p className="text-xs text-gray-500 mt-0.5">Gate: {gate.gate_id}</p>
-      </div>
-
-      {gate.artifact && (
-        <details className="text-xs">
-          <summary className="text-gray-400 cursor-pointer hover:text-gray-300">View artifact</summary>
-          <pre className="mt-2 bg-gray-900 rounded-lg p-3 overflow-auto max-h-48 text-gray-300 whitespace-pre-wrap">
-            {JSON.stringify(gate.artifact, null, 2)}
-          </pre>
-        </details>
-      )}
-
-      <textarea
-        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-amber-500 placeholder-gray-600"
-        rows={2}
-        placeholder="Optional feedback…"
-        value={feedback}
-        onChange={e => setFeedback(e.target.value)}
-      />
-
-      <div className="flex gap-2">
-        <button
-          onClick={() => decide('approve')}
-          disabled={!!deciding}
-          className="flex-1 py-1.5 text-sm bg-green-800 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-colors"
-        >
-          {deciding === 'approve' ? '…' : '✓ Approve'}
-        </button>
-        <button
-          onClick={() => decide('revise')}
-          disabled={!!deciding}
-          className="flex-1 py-1.5 text-sm bg-yellow-800 hover:bg-yellow-700 disabled:opacity-50 rounded-lg transition-colors"
-        >
-          {deciding === 'revise' ? '…' : '↩ Revise'}
-        </button>
-        <button
-          onClick={() => decide('reject')}
-          disabled={!!deciding}
-          className="flex-1 py-1.5 text-sm bg-red-900 hover:bg-red-800 disabled:opacity-50 rounded-lg transition-colors"
-        >
-          {deciding === 'reject' ? '…' : '✕ Reject'}
-        </button>
-      </div>
-    </div>
-  )
+interface Notification {
+  id: string
+  message: string
+  type: 'agent' | 'board' | 'schedule' | 'error'
+  at: Date
 }
 
+let _idCounter = 0
+function nextId() { return String(++_idCounter) }
+
 export default function NotificationCenter() {
-  const { gates, loadGates } = useStore()
+  const { agents } = useStore()
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { loadGates() }, [loadGates])
+  function agentName(id: string) {
+    return agents.find((a) => a.id === id)?.name ?? id
+  }
 
-  // Refresh gates on relevant WS events
+  function push(n: Omit<Notification, 'id' | 'at'>) {
+    setNotifications((prev) => [{ ...n, id: nextId(), at: new Date() }, ...prev].slice(0, 30))
+  }
+
   useAppEvents((event) => {
-    if (event.type === 'gate:created' || event.type === 'gate:decided') {
-      loadGates()
+    if (event.type === 'agent:error') {
+      push({ message: `${agentName(event.agentId)}: ${event.error}`, type: 'error' })
+    } else if (event.type === 'schedule:fired') {
+      push({ message: `Schedule fired for ${agentName(event.agentId)}: ${event.label || 'unnamed'}`, type: 'schedule' })
+    } else if (event.type === 'board:card_moved') {
+      push({ message: `Card moved: "${event.title}"`, type: 'board' })
     }
   })
 
   // Close on outside click
-  useEffect(() => {
+  useRef(() => {
     function onClickOut(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', onClickOut)
     return () => document.removeEventListener('mousedown', onClickOut)
-  }, [])
+  })
 
-  const pendingCount = gates.filter(g => g.status === 'pending').length
-  const pending = gates.filter(g => g.status === 'pending')
+  const unread = notifications.length
 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(o => !o)}
-        className="relative p-2 rounded-lg hover:bg-gray-700 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+        className="relative w-8 h-8 rounded-lg hover:bg-surface-2 flex items-center justify-center transition-colors"
+        style={{ color: 'var(--muted)' }}
         title="Notifications"
       >
-        <span className="text-lg">🔔</span>
-        {pendingCount > 0 && (
-          <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-amber-500 text-black text-[10px] font-bold rounded-full flex items-center justify-center">
-            {pendingCount}
+        <BellIcon />
+        {unread > 0 && (
+          <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-accent text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+            {Math.min(unread, 9)}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-gray-850 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-            <span className="font-semibold text-sm">Notifications</span>
-            {pendingCount > 0 && (
-              <span className="text-xs text-amber-400">{pendingCount} pending</span>
+        <div className="absolute right-0 bottom-full mb-2 w-72 bg-surface-1 border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
+            {notifications.length > 0 && (
+              <button
+                onClick={() => setNotifications([])}
+                className="text-[10px] text-muted hover:text-accent transition-colors"
+              >
+                Clear all
+              </button>
             )}
           </div>
-          <div className="max-h-[480px] overflow-y-auto p-3 space-y-3">
-            {pending.length === 0 ? (
-              <p className="text-gray-500 text-sm text-center py-6">No pending decisions</p>
+          <div className="max-h-64 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <p className="text-xs text-muted text-center py-6">No notifications</p>
             ) : (
-              pending.map(g => <GateCard key={g.id} gate={g} />)
+              notifications.map((n) => (
+                <div key={n.id} className="px-4 py-2.5 border-b border-border last:border-0">
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
+                  <p className="text-[10px] text-muted mt-0.5">
+                    {n.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              ))
             )}
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function BellIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+    </svg>
   )
 }

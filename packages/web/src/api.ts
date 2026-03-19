@@ -3,6 +3,7 @@ const BASE = '/api'
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
+    credentials: 'include',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   })
@@ -44,6 +45,41 @@ export const api = {
       req<{ ok: boolean; error?: string }>('POST', `/settings/providers/${id}/test`),
   },
 
+  // ─── Auth / Users ─────────────────────────────────────────────────────────
+
+  auth: {
+    me: () => req<User>('GET', '/users/me'),
+    login: (username: string, password: string) =>
+      req<User>('POST', '/users/login', { username, password }),
+    logout: () => req<{ ok: boolean }>('POST', '/users/logout'),
+    setup: (data: { username: string; displayName: string; password: string; companyName: string }) =>
+      req<User>('POST', '/setup', data),
+  },
+
+  users: {
+    list: () => req<User[]>('GET', '/users'),
+    create: (data: { username: string; displayName: string; password: string; isAdmin?: boolean }) =>
+      req<User>('POST', '/users', data),
+    update: (id: string, data: { displayName?: string; password?: string; avatarColor?: string }) =>
+      req<User>('PUT', `/users/${id}`, data),
+    delete: (id: string) => req<{ ok: boolean }>('DELETE', `/users/${id}`),
+  },
+
+  // ─── Roles ────────────────────────────────────────────────────────────────
+
+  roles: {
+    list: () => req<Role[]>('GET', '/roles'),
+    get: (id: string) => req<Role>('GET', `/roles/${id}`),
+    create: (data: { name: string; description?: string; prompt?: string }) =>
+      req<Role>('POST', '/roles', data),
+    update: (id: string, data: { name?: string; description?: string; prompt?: string }) =>
+      req<Role>('PUT', `/roles/${id}`, data),
+    delete: (id: string) => req<{ ok: boolean }>('DELETE', `/roles/${id}`),
+    forAgent: (agentId: string) => req<Role[]>('GET', `/roles/agent/${agentId}`),
+    assignToAgent: (agentId: string, roleIds: string[]) =>
+      req<Role[]>('PUT', `/roles/agent/${agentId}`, { roleIds }),
+  },
+
   // ─── Agents ───────────────────────────────────────────────────────────────
 
   agents: {
@@ -52,9 +88,10 @@ export const api = {
     create: (data: CreateAgentInput) => req<Agent>('POST', '/agents', data),
     update: (id: string, data: Partial<CreateAgentInput>) => req<Agent>('PUT', `/agents/${id}`, data),
     delete: (id: string) => req<{ ok: boolean }>('DELETE', `/agents/${id}`),
+    toggleActive: (id: string) => req<{ id: string; is_active: boolean }>('POST', `/agents/${id}/toggle-active`),
   },
 
-  // ─── Chat ─────────────────────────────────────────────────────────────────
+  // ─── Chat (direct agent DM — legacy) ─────────────────────────────────────
 
   chat: {
     history: (agentId: string) => req<ChatMessage[]>('GET', `/agents/${agentId}/chat`),
@@ -91,9 +128,9 @@ export const api = {
 
   schedules: {
     list:   (agentId: string) => req<Schedule[]>('GET', `/agents/${agentId}/schedules`),
-    create: (agentId: string, data: { cron: string; prompt: string; label?: string }) =>
+    create: (agentId: string, data: { cron: string; prompt: string; label?: string; skipIfNoTodos?: boolean }) =>
       req<Schedule>('POST', `/agents/${agentId}/schedules`, data),
-    patch:  (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) =>
+    patch:  (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled' | 'skip_if_no_todos'>>) =>
       req<Schedule>('PATCH', `/agents/${agentId}/schedules/${id}`, data),
     delete: (agentId: string, id: number) =>
       req<{ ok: boolean }>('DELETE', `/agents/${agentId}/schedules/${id}`),
@@ -110,7 +147,7 @@ export const api = {
       const url = agentId
         ? `${BASE}/workspace/upload?agentId=${encodeURIComponent(agentId)}`
         : `${BASE}/workspace/upload`
-      return fetch(url, { method: 'POST', body: fd }).then((r) => {
+      return fetch(url, { method: 'POST', credentials: 'include', body: fd }).then((r) => {
         if (!r.ok) throw new Error('Upload failed')
         return r.json() as Promise<FileEntry>
       })
@@ -119,49 +156,75 @@ export const api = {
       req<{ ok: boolean }>('DELETE', `/workspace?path=${encodeURIComponent(filePath)}`),
   },
 
-  // ─── Templates ────────────────────────────────────────────────────────────
-
-  templates: {
-    list: () => req<Template[]>('GET', '/templates'),
-    get: (id: string) => req<Template>('GET', `/templates/${id}`),
-    install: (dir: string) =>
-      req<{ template: Template; missingPlugins: string[] }>('POST', '/templates/install', { dir }),
-    activate: (id: string) => req<{ ok: boolean; activeTemplateId: string }>('POST', `/templates/${id}/activate`),
-    uninstall: (id: string) => req<{ ok: boolean }>('DELETE', `/templates/${id}`),
-  },
-
   // ─── Plugins ──────────────────────────────────────────────────────────────
 
   plugins: {
     list: () => req<Plugin[]>('GET', '/plugins'),
-    configure: (id: string, apiKey: string) => req<{ ok: boolean }>('POST', `/plugins/${id}/configure`, { apiKey }),
+    configure: (id: string, key: string, value: string) =>
+      req<{ ok: boolean; configured: boolean }>('POST', `/plugins/${id}/configure`, { key, value }),
     removeConfigure: (id: string) => req<{ ok: boolean }>('DELETE', `/plugins/${id}/configure`),
   },
 
-  // ─── Human Gates ──────────────────────────────────────────────────────────
+  // ─── Boards ───────────────────────────────────────────────────────────────
 
-  gates: {
-    list: (status: 'pending' | 'all' = 'pending') => req<HumanGate[]>('GET', `/gates?status=${status}`),
-    listByProject: (projectId: string) => req<HumanGate[]>('GET', `/gates/project/${projectId}`),
-    decide: (id: string, action: 'approve' | 'revise' | 'reject', feedback?: string) =>
-      req<{ ok: boolean; resolved: boolean }>('POST', `/gates/${id}/decide`, { action, feedback }),
+  boards: {
+    list: () => req<Board[]>('GET', '/boards'),
+    get: (id: string) => req<BoardFull>('GET', `/boards/${id}`),
+    create: (name: string) => req<BoardFull>('POST', '/boards', { name }),
+    addLane: (boardId: string, name: string) => req<Lane>('POST', `/boards/${boardId}/lanes`, { name }),
+    updateLane: (boardId: string, laneId: string, data: { name?: string; position?: number }) =>
+      req<Lane>('PUT', `/boards/${boardId}/lanes/${laneId}`, data),
+    deleteLane: (boardId: string, laneId: string) =>
+      req<{ ok: boolean }>('DELETE', `/boards/${boardId}/lanes/${laneId}`),
+    addLaneRule: (boardId: string, laneId: string, ruleType: LaneRule['rule_type'], targetId?: string) =>
+      req<LaneRule>('POST', `/boards/${boardId}/lanes/${laneId}/rules`, { ruleType, targetId }),
+    deleteLaneRule: (boardId: string, laneId: string, ruleId: string) =>
+      req<{ ok: boolean }>('DELETE', `/boards/${boardId}/lanes/${laneId}/rules/${ruleId}`),
+    addCard: (boardId: string, data: { laneId: string; title: string; description?: string; assigneeId?: string; assigneeType?: 'agent' | 'user' }) =>
+      req<Card>('POST', `/boards/${boardId}/cards`, data),
+    updateCard: (boardId: string, cardId: string, data: { title?: string; description?: string; assigneeId?: string | null; assigneeType?: 'agent' | 'user' | null }) =>
+      req<Card>('PUT', `/boards/${boardId}/cards/${cardId}`, data),
+    moveCard: (boardId: string, cardId: string, laneId: string, position?: number) =>
+      req<Card>('POST', `/boards/${boardId}/cards/${cardId}/move`, { laneId, position }),
+    deleteCard: (boardId: string, cardId: string) =>
+      req<{ ok: boolean }>('DELETE', `/boards/${boardId}/cards/${cardId}`),
   },
 
-  // ─── Pipeline Projects ────────────────────────────────────────────────────
+  // ─── Channels ─────────────────────────────────────────────────────────────
 
-  projects: {
-    list: () => req<PipelineProject[]>('GET', '/projects'),
-    get: (id: string) => req<PipelineProject>('GET', `/projects/${id}`),
-    create: (data: { templateId: string; name?: string; input?: unknown }) =>
-      req<PipelineProject>('POST', '/projects', data),
-    start: (id: string) => req<{ ok: boolean }>('POST', `/projects/${id}/start`),
-    pause: (id: string) => req<{ ok: boolean }>('POST', `/projects/${id}/pause`),
-    getState: (id: string) => req<PipelineState>('GET', `/projects/${id}/state`),
-    delete: (id: string) => req<{ ok: boolean }>('DELETE', `/projects/${id}`),
+  channels: {
+    list: () => req<Channel[]>('GET', '/channels'),
+    publicChannel: () => req<Channel>('GET', '/channels/public'),
+    create: (name: string) => req<Channel>('POST', '/channels', { name }),
+    delete: (id: string) => req<{ ok: boolean }>('DELETE', `/channels/${id}`),
+    messages: (channelId: string, limit = 100) =>
+      req<ChannelMessage[]>('GET', `/channels/${channelId}/messages?limit=${limit}`),
+    send: (channelId: string, content: string) =>
+      req<{ id: number }>('POST', `/channels/${channelId}/messages`, { content }),
+    getDm: (partnerId: string) => req<Channel>('GET', `/channels/dm/${partnerId}`),
+    sendDm: (channelId: string, content: string) =>
+      req<{ id: number }>('POST', `/channels/dm/${channelId}/messages`, { content }),
   },
 }
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
+
+export interface User {
+  id: string
+  username: string
+  display_name: string
+  avatar_color: string
+  is_admin: number
+  created_at: string
+}
+
+export interface Role {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  created_at: string
+}
 
 export interface Agent {
   id: string
@@ -173,6 +236,7 @@ export interface Agent {
   modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string }
   source: string
   avatar_color: string
+  is_active: number
   created_at: string
   updated_at: string
 }
@@ -217,6 +281,7 @@ export interface Schedule {
   prompt: string
   label: string
   enabled: number
+  skip_if_no_todos: number
   last_run_at: string | null
   next_run_at: string | null
   created_at: string
@@ -232,26 +297,11 @@ export interface FileEntry {
   updated_at: string
 }
 
-export interface Template {
-  id: string
-  display_name: string
-  version: string
+export interface PluginEnvVar {
+  key: string
+  required: boolean
   description: string
-  manifest: TemplateManifest
-  installed_at: string
-  isActive: boolean
-}
-
-export interface TemplateManifest {
-  id: string
-  version: string
-  displayName: string
-  description?: string
-  requiredPlugins: string[]
-  optionalPlugins?: string[]
-  agents: Array<{ id: string; name: string; role: string; isPipelineController?: boolean }>
-  pipeline?: { type: 'staged' | 'freeform'; entryFile: string }
-  uiPanels?: Array<{ id: string; displayName: string; slot: string }>
+  hasValue: boolean
 }
 
 export interface Plugin {
@@ -259,38 +309,64 @@ export interface Plugin {
   display_name: string
   description: string
   configured: boolean
-  envKey: string | null
-  hasKey: boolean
+  envVars: PluginEnvVar[]
+  hasAllRequired: boolean
+  toolIds: string[]
 }
 
-export interface HumanGate {
+export interface Board {
   id: string
-  project_id: string
-  gate_id: string
-  description: string
-  artifact: unknown | null
-  status: 'pending' | 'decided'
-  decision: { action: 'approve' | 'revise' | 'reject'; feedback?: string } | null
-  created_at: string
-  decided_at: string | null
-}
-
-export interface PipelineProject {
-  id: string
-  template_id: string
   name: string
-  status: 'idle' | 'running' | 'paused' | 'completed' | 'failed'
-  state: PipelineState
-  input: unknown
+  created_at: string
+}
+
+export interface Lane {
+  id: string
+  board_id: string
+  name: string
+  position: number
+}
+
+export interface Card {
+  id: string
+  board_id: string
+  lane_id: string
+  title: string
+  description: string
+  assignee_id: string | null
+  assignee_type: 'agent' | 'user' | null
+  created_by: string
+  created_by_type: string
+  position: number
   created_at: string
   updated_at: string
 }
 
-export interface PipelineState {
-  projectId: string
-  currentStage: string
-  stages: Record<string, 'pending' | 'in-progress' | 'awaiting-approval' | 'complete' | 'failed' | 'cancelled'>
-  activeAgentId?: string
-  errors: Array<{ stage?: string; message: string; timestamp: string }>
-  waitingForGate?: { gateId: string; description: string }
+export interface LaneRule {
+  id: string
+  lane_id: string
+  rule_type: 'admin_only' | 'role' | 'employee'
+  target_id: string | null
+}
+
+export interface BoardFull extends Board {
+  lanes: Lane[]
+  cards: Card[]
+  rules: LaneRule[]
+}
+
+export interface Channel {
+  id: string
+  name: string
+  is_dm: number
+  created_at: string
+}
+
+export interface ChannelMessage {
+  id: number
+  channel_id: string
+  sender_id: string
+  sender_type: 'agent' | 'user'
+  content: string
+  created_at: string
 }

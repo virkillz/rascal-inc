@@ -1,9 +1,9 @@
 /**
- * Platform tools — workspace, memory, todos, pipeline control, and human gate.
+ * Platform tools — workspace, memory, and todos.
  *
  * Each factory function returns a ToolDefinition (Pi SDK / TypeBox format)
  * scoped to a specific agent and workspace. Call buildAgentTools() to get
- * the set of tools appropriate for an agent's config and current context.
+ * the set of tools appropriate for an agent's config.
  */
 
 import fs from 'fs'
@@ -11,9 +11,6 @@ import path from 'path'
 import { Type } from '@sinclair/typebox'
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent'
 import { getDb } from './db.js'
-import { createHumanGate } from './human-gate-service.js'
-import { eventBus } from './event-bus.js'
-import type { StageStatus } from './event-bus.js'
 import { pluginLoader } from './plugin-loader.js'
 
 // ── Result helper ─────────────────────────────────────────────────────────────
@@ -131,90 +128,18 @@ export function makeTodoCompleteTool(agentId: string): ToolDefinition {
   }
 }
 
-// ── Pipeline control tool ─────────────────────────────────────────────────────
-
-export function makePipelineAdvanceTool(projectId: string): ToolDefinition {
-  return {
-    name: 'pipeline_advance',
-    label: 'Pipeline: Advance Stage',
-    description: 'Emit a stage status change for the active pipeline project.',
-    parameters: Type.Object({
-      stage: Type.String({ description: 'Stage name, e.g. "ideation" or "writing"' }),
-      status: Type.Union(
-        [
-          Type.Literal('in-progress'),
-          Type.Literal('complete'),
-          Type.Literal('failed'),
-          Type.Literal('cancelled'),
-        ],
-        { description: 'New status for the stage' },
-      ),
-    }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    execute: async (_id, params: any) => {
-      eventBus.emit({
-        type: 'pipeline:stage',
-        projectId,
-        stage: params.stage,
-        status: params.status as StageStatus,
-      })
-      return ok(`Stage "${params.stage}" → ${params.status}`)
-    },
-  }
-}
-
-// ── Human gate tool ───────────────────────────────────────────────────────────
-
-export function makeHumanGateTool(projectId: string): ToolDefinition {
-  return {
-    name: 'human_gate',
-    label: 'Human Gate',
-    description:
-      'Pause and wait for a human decision before continuing. ' +
-      'The tool suspends until the human approves, revises, or rejects in the notification center. ' +
-      'Returns the decision JSON.',
-    parameters: Type.Object({
-      id: Type.String({ description: 'Unique gate identifier, e.g. "concept-approval"' }),
-      description: Type.String({ description: 'What the human needs to review or decide' }),
-    }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    execute: async (_id, params: any) => {
-      const gate = createHumanGate({
-        id: params.id,
-        projectId,
-        description: params.description,
-      })
-      const decision = await gate.wait()
-      return ok(JSON.stringify(decision))
-    },
-  }
-}
-
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 export interface ToolContext {
   agentId: string
   workspaceDir: string
-  projectId?: string
 }
 
-// Platform-owned tool IDs — handled here, not routed to plugin loader
-const PLATFORM_TOOL_IDS = new Set([
-  'workspace-read',
-  'workspace-write',
-  'pipeline-control',
-  'human-gate',
-])
+const PLATFORM_TOOL_IDS = new Set(['workspace-read', 'workspace-write'])
 
 /**
  * Build the list of custom ToolDefinitions for an agent session.
- *
- * Platform tool IDs (workspace-read, pipeline-control, etc.) are handled
- * directly. Any unknown ID is routed to the plugin loader, which checks
- * whether a plugin owns that tool ID.
- *
- * @param toolIds  The tool IDs declared in the agent's config
- * @param ctx      Agent-scoped context (id, workspace dir, optional project id)
+ * Platform tool IDs are handled here; unknown IDs are routed to the plugin loader.
  */
 export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefinition[] {
   const tools: ToolDefinition[] = []
@@ -229,26 +154,18 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
         case 'workspace-write':
           tools.push(makeWorkspaceWriteTool(ctx.workspaceDir))
           break
-        case 'pipeline-control':
-          if (ctx.projectId) tools.push(makePipelineAdvanceTool(ctx.projectId))
-          break
-        case 'human-gate':
-          if (ctx.projectId) tools.push(makeHumanGateTool(ctx.projectId))
-          break
       }
     } else {
-      // Unknown ID — may be owned by a plugin
       pluginToolIds.push(id)
     }
   }
 
-  // Resolve plugin tools
   if (pluginToolIds.length > 0) {
     const pluginTools = pluginLoader.getToolsForIds(pluginToolIds, ctx)
     tools.push(...pluginTools)
   }
 
-  // Every agent always gets memory and todo tools.
+  // Every agent always gets memory and todo tools
   tools.push(makeMemoryAddTool(ctx.agentId))
   tools.push(makeTodoAddTool(ctx.agentId))
   tools.push(makeTodoCompleteTool(ctx.agentId))

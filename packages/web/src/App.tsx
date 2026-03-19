@@ -2,22 +2,38 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useStore } from './store.ts'
 import { ThemeProvider } from './contexts/ThemeContext.tsx'
+import { api, type User } from './api.ts'
 import Onboarding from './pages/Onboarding.tsx'
+import Login from './pages/Login.tsx'
 import Roster from './pages/Roster.tsx'
 import AgentChat from './pages/AgentChat.tsx'
 import Settings from './pages/Settings.tsx'
 import Workspace from './pages/Workspace.tsx'
-import Templates from './pages/Templates.tsx'
 import Plugins from './pages/Plugins.tsx'
-import Pipeline from './pages/Pipeline.tsx'
+import Board from './pages/Board.tsx'
+import Channels from './pages/Channels.tsx'
+import Roles from './pages/Roles.tsx'
 import Layout from './components/Layout.tsx'
+
+type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
 
 export default function App() {
   const { settings, loadSettings } = useStore()
   const [loading, setLoading] = useState(true)
+  const [authState, setAuthState] = useState<AuthState>('loading')
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
 
   useEffect(() => {
-    loadSettings().finally(() => setLoading(false))
+    loadSettings()
+      .then(() => api.auth.me())
+      .then((user) => {
+        setCurrentUser(user)
+        setAuthState('authenticated')
+      })
+      .catch(() => {
+        setAuthState('unauthenticated')
+      })
+      .finally(() => setLoading(false))
   }, [loadSettings])
 
   if (loading) {
@@ -33,6 +49,7 @@ export default function App() {
     )
   }
 
+  // First-run setup wizard (no users exist yet)
   if (settings?.firstRun) {
     return (
       <ThemeProvider>
@@ -41,19 +58,30 @@ export default function App() {
     )
   }
 
+  // Login gate
+  if (authState === 'unauthenticated') {
+    return (
+      <ThemeProvider>
+        <Login onLogin={(user) => { setCurrentUser(user); setAuthState('authenticated') }} />
+      </ThemeProvider>
+    )
+  }
+
   return (
     <ThemeProvider>
       <BrowserRouter>
         <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<Navigate to="/roster" replace />} />
+          <Route element={<Layout currentUser={currentUser} onLogout={() => { setCurrentUser(null); setAuthState('unauthenticated') }} />}>
+            <Route index element={<Navigate to="/channels" replace />} />
+            <Route path="/channels" element={<Channels />} />
+            <Route path="/channels/:id" element={<Channels />} />
+            <Route path="/board" element={<Board />} />
             <Route path="/roster" element={<Roster />} />
             <Route path="/agents/:id" element={<AgentChat />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/roles" element={<Roles />} />
             <Route path="/workspace" element={<Workspace />} />
-            <Route path="/templates" element={<Templates />} />
             <Route path="/plugins" element={<Plugins />} />
-            <Route path="/pipeline" element={<Pipeline />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
       </BrowserRouter>

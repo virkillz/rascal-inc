@@ -55,9 +55,12 @@ export function createPluginsRouter(): Router {
     const rows = getDb().prepare('SELECT * FROM plugins ORDER BY id ASC').all() as unknown as PluginRow[]
     const env = readEnv()
 
-    res.json(rows.map((row) => {
-      const plugin = pluginLoader.get(row.id)
-      const envVars = plugin?.config.env ?? []
+    // Only return plugins that are registered in the loader (filter out stale DB rows)
+    const registeredRows = rows.filter((row) => !!pluginLoader.get(row.id))
+
+    res.json(registeredRows.map((row) => {
+      const plugin = pluginLoader.get(row.id)!
+      const envVars = plugin.config.env
       const hasAllRequired = envVars
         .filter((e) => e.required)
         .every((e) => !!env[e.key])
@@ -72,7 +75,7 @@ export function createPluginsRouter(): Router {
           hasValue: !!env[e.key],
         })),
         hasAllRequired,
-        toolIds: plugin?.config.toolIds ?? [],
+        toolIds: plugin.config.toolIds,
       }
     }))
   })

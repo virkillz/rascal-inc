@@ -1,5 +1,5 @@
 import { CronExpressionParser } from 'cron-parser'
-import { getDb, getSetting, type ScheduleRow } from './db.js'
+import { getDb, getSetting, getAgentTodos, getPublicChannelId, getRecentChannelMessages, type ScheduleRow } from './db.js'
 import { chatWithAgent, type AgentRecord, type ModelConfig } from './agent-runner.js'
 import { eventBus } from './event-bus.js'
 
@@ -15,6 +15,27 @@ function getDefaultModel(): ModelConfig {
     } catch { /* fall through */ }
   }
   return { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4-6', thinkingLevel: 'low' }
+}
+
+function buildSchedulerPrompt(schedule: ScheduleRow, agentName: string): string {
+  // Include recent #public channel history so the agent has company context
+  let channelContext = ''
+  try {
+    const channelId = getPublicChannelId()
+    const messages = getRecentChannelMessages(channelId, 30)
+    if (messages.length > 0) {
+      const db = getDb()
+      const lines = messages.map((m) => {
+        const name = m.sender_type === 'agent'
+          ? (db.prepare('SELECT name FROM agents WHERE id = ?').get(m.sender_id) as { name: string } | undefined)?.name ?? m.sender_id
+          : (db.prepare('SELECT display_name FROM users WHERE id = ?').get(m.sender_id) as { display_name: string } | undefined)?.display_name ?? m.sender_id
+        return `${name}: ${m.content}`
+      })
+      channelContext = `## Recent company channel activity\n${lines.join('\n')}\n\n`
+    }
+  } catch { /* no channel yet */ }
+
+  return `${channelContext}[Scheduled task — ${schedule.label || schedule.cron}]\n${schedule.prompt}`
 }
 
 export function startScheduler(): void {
@@ -39,9 +60,24 @@ export function startScheduler(): void {
 
     for (const s of due) {
       const agent = db
-        .prepare('SELECT * FROM agents WHERE id = ?')
-        .get(s.agent_id) as unknown as AgentRecord | undefined
+        .prepare('SELECT * FROM agents WHERE id = ? AND is_active = 1')
+        .get(s.agent_id) as unknown as (AgentRecord & { is_active: number }) | undefined
+
+      // Skip inactive agents
       if (!agent) continue
+
+      // Skip if skip_if_no_todos is set and agent has no open todos
+      if (s.skip_if_no_todos) {
+        const openTodos = getAgentTodos(s.agent_id, true)
+        if (openTodos.length === 0) {
+          // Still advance next_run_at so it doesn't fire again immediately
+          try {
+            db.prepare('UPDATE agent_schedules SET last_run_at = ?, next_run_at = ? WHERE id = ?')
+              .run(now, computeNextRun(s.cron), s.id)
+          } catch { /* skip invalid cron */ }
+          continue
+        }
+      }
 
       // Advance to next run before firing so a crash doesn't re-fire
       let nextRun: string
@@ -55,15 +91,9 @@ export function startScheduler(): void {
 
       eventBus.emit({ type: 'schedule:fired', agentId: s.agent_id, scheduleId: s.id, label: s.label })
 
-      const triggerMsg = `[Scheduled: ${s.label || s.cron}] ${s.prompt}`
-      db.prepare('INSERT INTO chat_messages (agent_id, role, content) VALUES (?, ?, ?)')
-        .run(agent.id, 'user', triggerMsg)
+      const triggerMsg = buildSchedulerPrompt(s, agent.name)
 
       chatWithAgent(agent, triggerMsg, getDefaultModel())
-        .then((reply) => {
-          db.prepare('INSERT INTO chat_messages (agent_id, role, content) VALUES (?, ?, ?)')
-            .run(agent.id, 'assistant', reply)
-        })
         .catch(console.error)
     }
   }, 60_000)

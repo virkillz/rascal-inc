@@ -8,10 +8,7 @@ import {
   type TodoItem,
   type Schedule,
   type FileEntry,
-  type Template,
   type Plugin,
-  type HumanGate,
-  type PipelineProject,
 } from './api.ts'
 
 interface AppState {
@@ -28,6 +25,7 @@ interface AppState {
   addAgent: (data: Parameters<typeof api.agents.create>[0]) => Promise<Agent>
   updateAgent: (id: string, data: Parameters<typeof api.agents.update>[1]) => Promise<Agent>
   deleteAgent: (id: string) => Promise<void>
+  toggleAgentActive: (id: string) => Promise<void>
 
   // Agent status (driven by WS events)
   agentStatus: Record<string, 'idle' | 'thinking' | 'error'>
@@ -50,8 +48,8 @@ interface AppState {
   // Schedules (per-agent, loaded on demand)
   schedules: Record<string, Schedule[]>
   loadSchedules: (agentId: string) => Promise<void>
-  addSchedule: (agentId: string, data: { cron: string; prompt: string; label?: string }) => Promise<void>
-  patchSchedule: (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) => Promise<void>
+  addSchedule: (agentId: string, data: { cron: string; prompt: string; label?: string; skipIfNoTodos?: boolean }) => Promise<void>
+  patchSchedule: (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled' | 'skip_if_no_todos'>>) => Promise<void>
   deleteSchedule: (agentId: string, id: number) => Promise<void>
 
   // Workspace
@@ -59,31 +57,11 @@ interface AppState {
   loadWorkspace: () => Promise<void>
   deleteWorkspaceFile: (path: string) => Promise<void>
 
-  // Templates
-  templates: Template[]
-  loadTemplates: () => Promise<void>
-  installTemplate: (dir: string) => Promise<void>
-  activateTemplate: (id: string) => Promise<void>
-  uninstallTemplate: (id: string) => Promise<void>
-
   // Plugins
   plugins: Plugin[]
   loadPlugins: () => Promise<void>
-  configurePlugin: (id: string, apiKey: string) => Promise<void>
+  configurePlugin: (id: string, key: string, value: string) => Promise<void>
   removePluginConfig: (id: string) => Promise<void>
-
-  // Human gates
-  gates: HumanGate[]
-  loadGates: () => Promise<void>
-  decideGate: (id: string, action: 'approve' | 'revise' | 'reject', feedback?: string) => Promise<void>
-
-  // Pipeline projects
-  projects: PipelineProject[]
-  loadProjects: () => Promise<void>
-  createProject: (data: { templateId: string; name?: string; input?: unknown }) => Promise<void>
-  startProject: (id: string) => Promise<void>
-  pauseProject: (id: string) => Promise<void>
-  deleteProject: (id: string) => Promise<void>
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -95,10 +73,7 @@ export const useStore = create<AppState>((set, get) => ({
   todos: {},
   schedules: {},
   workspaceFiles: [],
-  templates: [],
   plugins: [],
-  gates: [],
-  projects: [],
 
   // ─── Settings ───────────────────────────────────────────────────────────────
 
@@ -139,6 +114,13 @@ export const useStore = create<AppState>((set, get) => ({
   deleteAgent: async (id) => {
     await api.agents.delete(id)
     set((s) => ({ agents: s.agents.filter((a) => a.id !== id) }))
+  },
+
+  toggleAgentActive: async (id) => {
+    const result = await api.agents.toggleActive(id)
+    set((s) => ({
+      agents: s.agents.map((a) => (a.id === id ? { ...a, is_active: result.is_active ? 1 : 0 } : a)),
+    }))
   },
 
   // ─── Agent status ───────────────────────────────────────────────────────────
@@ -255,33 +237,6 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({ workspaceFiles: s.workspaceFiles.filter((f) => f.path !== filePath) }))
   },
 
-  // ─── Templates ──────────────────────────────────────────────────────────────
-
-  loadTemplates: async () => {
-    const templates = await api.templates.list()
-    set({ templates })
-  },
-
-  installTemplate: async (dir) => {
-    const { template } = await api.templates.install(dir)
-    set((s) => ({ templates: [...s.templates, template] }))
-    // Reload agents — template install adds agents
-    await get().loadAgents()
-  },
-
-  activateTemplate: async (id) => {
-    await api.templates.activate(id)
-    set((s) => ({
-      templates: s.templates.map((t) => ({ ...t, isActive: t.id === id })),
-    }))
-  },
-
-  uninstallTemplate: async (id) => {
-    await api.templates.uninstall(id)
-    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }))
-    await get().loadAgents()
-  },
-
   // ─── Plugins ────────────────────────────────────────────────────────────────
 
   loadPlugins: async () => {
@@ -289,64 +244,15 @@ export const useStore = create<AppState>((set, get) => ({
     set({ plugins })
   },
 
-  configurePlugin: async (id, apiKey) => {
-    await api.plugins.configure(id, apiKey)
-    set((s) => ({
-      plugins: s.plugins.map((p) => (p.id === id ? { ...p, configured: true, hasKey: true } : p)),
-    }))
+  configurePlugin: async (id, key, value) => {
+    await api.plugins.configure(id, key, value)
+    const plugins = await api.plugins.list()
+    set({ plugins })
   },
 
   removePluginConfig: async (id) => {
     await api.plugins.removeConfigure(id)
-    set((s) => ({
-      plugins: s.plugins.map((p) => (p.id === id ? { ...p, configured: false, hasKey: false } : p)),
-    }))
-  },
-
-  // ─── Human Gates ────────────────────────────────────────────────────────────
-
-  loadGates: async () => {
-    const gates = await api.gates.list('all')
-    set({ gates })
-  },
-
-  decideGate: async (id, action, feedback) => {
-    await api.gates.decide(id, action, feedback)
-    set((s) => ({
-      gates: s.gates.map((g) =>
-        g.id === id ? { ...g, status: 'decided' as const, decision: { action, feedback } } : g
-      ),
-    }))
-  },
-
-  // ─── Pipeline Projects ───────────────────────────────────────────────────────
-
-  loadProjects: async () => {
-    const projects = await api.projects.list()
-    set({ projects })
-  },
-
-  createProject: async (data) => {
-    const project = await api.projects.create(data)
-    set((s) => ({ projects: [project, ...s.projects] }))
-  },
-
-  startProject: async (id) => {
-    await api.projects.start(id)
-    set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, status: 'running' as const } : p)),
-    }))
-  },
-
-  pauseProject: async (id) => {
-    await api.projects.pause(id)
-    set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, status: 'paused' as const } : p)),
-    }))
-  },
-
-  deleteProject: async (id) => {
-    await api.projects.delete(id)
-    set((s) => ({ projects: s.projects.filter((p) => p.id !== id) }))
+    const plugins = await api.plugins.list()
+    set({ plugins })
   },
 }))

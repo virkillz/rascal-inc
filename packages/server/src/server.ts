@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import { createServer } from 'http'
 import path from 'path'
 import fs from 'fs'
@@ -12,17 +13,24 @@ import { createMemoryRouter } from './api/memory.js'
 import { createTodosRouter } from './api/todos.js'
 import { createSchedulesRouter } from './api/schedules.js'
 import { createWorkspaceRouter } from './api/workspace.js'
-import { createTemplatesRouter } from './api/templates.js'
 import { createPluginsRouter } from './api/plugins.js'
-import { createGatesRouter } from './api/gates.js'
-import { createPipelineRouter } from './api/pipeline.js'
+import { createUsersRouter, createSetupRouter } from './api/users.js'
+import { createRolesRouter } from './api/roles.js'
+import { createBoardsRouter } from './api/boards.js'
+import { createChannelsRouter } from './api/channels.js'
 
 export function createApp(opts: { webDistDir?: string; workspaceDir?: string } = {}) {
   const app = express()
 
-  app.use(cors({ origin: 'http://localhost:5173' }))
+  app.use(cors({ origin: 'http://localhost:5173', credentials: true }))
   app.use(express.json())
+  app.use(cookieParser())
 
+  // ── Auth + setup ────────────────────────────────────────────────────────────
+  app.use('/api/setup', createSetupRouter())
+  app.use('/api/users', createUsersRouter())
+
+  // ── Core platform ───────────────────────────────────────────────────────────
   app.use('/api/settings', createSettingsRouter())
   app.use('/api/agents', createAgentsRouter())
   app.use('/api/agents', createChatRouter())
@@ -30,10 +38,12 @@ export function createApp(opts: { webDistDir?: string; workspaceDir?: string } =
   app.use('/api/agents', createTodosRouter())
   app.use('/api/agents', createSchedulesRouter())
   app.use('/api/workspace', createWorkspaceRouter(opts.workspaceDir ?? process.cwd()))
-  app.use('/api/templates', createTemplatesRouter())
   app.use('/api/plugins', createPluginsRouter())
-  app.use('/api/gates', createGatesRouter())
-  app.use('/api/projects', createPipelineRouter())
+
+  // ── New platform primitives ─────────────────────────────────────────────────
+  app.use('/api/roles', createRolesRouter())
+  app.use('/api/boards', createBoardsRouter())
+  app.use('/api/channels', createChannelsRouter())
 
   // Health check
   app.get('/api/health', (_req, res) => res.json({ ok: true }))

@@ -26,7 +26,7 @@ export function createChatRouter(): Router {
   router.get('/:id/chat', (req, res) => {
     const messages = getDb()
       .prepare('SELECT * FROM chat_messages WHERE agent_id = ? ORDER BY created_at ASC')
-      .all(req.params.id) as MessageRow[]
+      .all(req.params.id) as unknown as MessageRow[]
     res.json(messages)
   })
 

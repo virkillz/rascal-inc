@@ -9,7 +9,7 @@ import {
   type AgentSessionEvent,
 } from '@mariozechner/pi-coding-agent'
 import path from 'path'
-import { getAgentMemory, getAgentTodos } from './db.js'
+import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting } from './db.js'
 import { eventBus } from './event-bus.js'
 import { buildAgentTools } from './platform-tools.js'
 
@@ -47,21 +47,29 @@ export function setDataDir(dir: string): void {
   dataDir = dir
 }
 
-/** Resolve the workspace directory for an agent based on its source field. */
-function resolveWorkspaceDir(agent: AgentRecord, projectId?: string): string {
-  // source is "template:<templateId>" for template agents, "user" for standalone
-  const match = agent.source.match(/^template:(.+)$/)
-  if (!match) return path.join(dataDir, 'workspace')
-  const templateId = match[1]
-  return projectId
-    ? path.join(dataDir, 'workspace', templateId, projectId)
-    : path.join(dataDir, 'workspace', templateId)
+function resolveWorkspaceDir(): string {
+  return path.join(dataDir, 'workspace')
 }
 
 function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
-  const base = agent.system_prompt.trim()
-  const header = `You are ${agent.name}, ${agent.role} at this company.`
+  // ── Layer 1: Platform prompt ─────────────────────────────────────────────
+  const companyName = getSetting('company_name') ?? 'this company'
+  const rawPlatformPrompt = getSetting('platform_prompt') ??
+    'You are an AI agent working for {company_name}. You have access to the working directory at {working_directory}. Follow the Standard Operating Procedure in SOP.md and your job description.'
+  const platformPrompt = rawPlatformPrompt
+    .replace('{company_name}', companyName)
+    .replace('{working_directory}', workspaceDir)
 
+  // ── Layer 2: Role prompts ────────────────────────────────────────────────
+  const roles = getAgentRoles(agent.id)
+  const roleBlock = roles.length
+    ? roles.map((r) => `## Role: ${r.name}\n${r.prompt}`).join('\n\n')
+    : ''
+
+  // ── Layer 3: Identity prompt ─────────────────────────────────────────────
+  const identityBlock = agent.system_prompt.trim()
+
+  // ── Dynamic context: memory + todos ─────────────────────────────────────
   const memories = getAgentMemory(agent.id)
   const todos = getAgentTodos(agent.id, true)
 
@@ -82,7 +90,9 @@ function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
     `Use memory_add proactively whenever you learn something worth remembering across conversations.\n` +
     `Use todo_add to track multi-step work you intend to continue.`
 
-  return [header, base, toolsBlock, memoryBlock, todoBlock].filter(Boolean).join('\n\n')
+  return [platformPrompt, roleBlock, identityBlock, toolsBlock, memoryBlock, todoBlock]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 function resolveModelConfig(modelConfigJson: string, defaultConfig: ModelConfig): ModelConfig {
@@ -97,7 +107,6 @@ function resolveModelConfig(modelConfigJson: string, defaultConfig: ModelConfig)
 async function createLiveSession(
   agent: AgentRecord,
   defaultModel: ModelConfig,
-  projectId?: string,
 ): Promise<LiveSession> {
   const config = resolveModelConfig(agent.model_config, defaultModel)
 
@@ -105,7 +114,7 @@ async function createLiveSession(
   const model = getModel(config.provider as any, config.modelId as any)
   if (!model) throw new Error(`Model not found: ${config.provider}/${config.modelId}`)
 
-  const workspaceDir = resolveWorkspaceDir(agent, projectId)
+  const workspaceDir = resolveWorkspaceDir()
   const systemPrompt = buildSystemPrompt(agent, workspaceDir)
   const sessionsDir = path.join(dataDir, 'sessions', agent.id)
 
@@ -114,7 +123,6 @@ async function createLiveSession(
   const customTools = buildAgentTools(toolIds, {
     agentId: agent.id,
     workspaceDir,
-    projectId,
   })
 
   const loader = new DefaultResourceLoader({
@@ -161,10 +169,9 @@ export async function chatWithAgent(
   agent: AgentRecord,
   message: string,
   defaultModel: ModelConfig,
-  projectId?: string,
 ): Promise<string> {
   if (!liveSessions.has(agent.id)) {
-    const live = await createLiveSession(agent, defaultModel, projectId)
+    const live = await createLiveSession(agent, defaultModel)
     liveSessions.set(agent.id, live)
   }
 
