@@ -1,5 +1,14 @@
 import { create } from 'zustand'
-import { api, type Agent, type Settings, type Provider } from './api.ts'
+import {
+  api,
+  type Agent,
+  type Settings,
+  type Provider,
+  type MemoryEntry,
+  type TodoItem,
+  type Schedule,
+  type FileEntry,
+} from './api.ts'
 
 interface AppState {
   // Settings
@@ -15,12 +24,49 @@ interface AppState {
   addAgent: (data: Parameters<typeof api.agents.create>[0]) => Promise<Agent>
   updateAgent: (id: string, data: Parameters<typeof api.agents.update>[1]) => Promise<Agent>
   deleteAgent: (id: string) => Promise<void>
+
+  // Agent status (driven by WS events)
+  agentStatus: Record<string, 'idle' | 'thinking' | 'error'>
+  setAgentStatus: (agentId: string, status: 'idle' | 'thinking' | 'error') => void
+
+  // Memory (per-agent, loaded on demand)
+  memory: Record<string, MemoryEntry[]>
+  loadMemory: (agentId: string) => Promise<void>
+  addMemory: (agentId: string, content: string) => Promise<void>
+  updateMemory: (agentId: string, id: number, content: string) => Promise<void>
+  deleteMemory: (agentId: string, id: number) => Promise<void>
+
+  // Todos (per-agent, loaded on demand)
+  todos: Record<string, TodoItem[]>
+  loadTodos: (agentId: string) => Promise<void>
+  addTodo: (agentId: string, text: string) => Promise<void>
+  patchTodo: (agentId: string, id: number, data: { completed?: boolean; text?: string }) => Promise<void>
+  deleteTodo: (agentId: string, id: number) => Promise<void>
+
+  // Schedules (per-agent, loaded on demand)
+  schedules: Record<string, Schedule[]>
+  loadSchedules: (agentId: string) => Promise<void>
+  addSchedule: (agentId: string, data: { cron: string; prompt: string; label?: string }) => Promise<void>
+  patchSchedule: (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) => Promise<void>
+  deleteSchedule: (agentId: string, id: number) => Promise<void>
+
+  // Workspace
+  workspaceFiles: FileEntry[]
+  loadWorkspace: () => Promise<void>
+  deleteWorkspaceFile: (path: string) => Promise<void>
 }
 
 export const useStore = create<AppState>((set, get) => ({
   settings: null,
   providers: [],
   agents: [],
+  agentStatus: {},
+  memory: {},
+  todos: {},
+  schedules: {},
+  workspaceFiles: [],
+
+  // ─── Settings ───────────────────────────────────────────────────────────────
 
   loadSettings: async () => {
     const settings = await api.settings.get()
@@ -36,6 +82,8 @@ export const useStore = create<AppState>((set, get) => ({
     const providers = await api.settings.providers()
     set({ providers })
   },
+
+  // ─── Agents ─────────────────────────────────────────────────────────────────
 
   loadAgents: async () => {
     const agents = await api.agents.list()
@@ -57,5 +105,119 @@ export const useStore = create<AppState>((set, get) => ({
   deleteAgent: async (id) => {
     await api.agents.delete(id)
     set((s) => ({ agents: s.agents.filter((a) => a.id !== id) }))
+  },
+
+  // ─── Agent status ───────────────────────────────────────────────────────────
+
+  setAgentStatus: (agentId, status) => {
+    set((s) => ({ agentStatus: { ...s.agentStatus, [agentId]: status } }))
+  },
+
+  // ─── Memory ─────────────────────────────────────────────────────────────────
+
+  loadMemory: async (agentId) => {
+    const entries = await api.memory.list(agentId)
+    set((s) => ({ memory: { ...s.memory, [agentId]: entries } }))
+  },
+
+  addMemory: async (agentId, content) => {
+    const entry = await api.memory.create(agentId, content)
+    set((s) => ({ memory: { ...s.memory, [agentId]: [...(s.memory[agentId] ?? []), entry] } }))
+  },
+
+  updateMemory: async (agentId, id, content) => {
+    const entry = await api.memory.update(agentId, id, content)
+    set((s) => ({
+      memory: {
+        ...s.memory,
+        [agentId]: (s.memory[agentId] ?? []).map((e) => (e.id === id ? entry : e)),
+      },
+    }))
+  },
+
+  deleteMemory: async (agentId, id) => {
+    await api.memory.delete(agentId, id)
+    set((s) => ({
+      memory: {
+        ...s.memory,
+        [agentId]: (s.memory[agentId] ?? []).filter((e) => e.id !== id),
+      },
+    }))
+  },
+
+  // ─── Todos ──────────────────────────────────────────────────────────────────
+
+  loadTodos: async (agentId) => {
+    const items = await api.todos.list(agentId)
+    set((s) => ({ todos: { ...s.todos, [agentId]: items } }))
+  },
+
+  addTodo: async (agentId, text) => {
+    const item = await api.todos.create(agentId, text)
+    set((s) => ({ todos: { ...s.todos, [agentId]: [...(s.todos[agentId] ?? []), item] } }))
+  },
+
+  patchTodo: async (agentId, id, data) => {
+    const item = await api.todos.patch(agentId, id, data)
+    set((s) => ({
+      todos: {
+        ...s.todos,
+        [agentId]: (s.todos[agentId] ?? []).map((t) => (t.id === id ? item : t)),
+      },
+    }))
+  },
+
+  deleteTodo: async (agentId, id) => {
+    await api.todos.delete(agentId, id)
+    set((s) => ({
+      todos: {
+        ...s.todos,
+        [agentId]: (s.todos[agentId] ?? []).filter((t) => t.id !== id),
+      },
+    }))
+  },
+
+  // ─── Schedules ──────────────────────────────────────────────────────────────
+
+  loadSchedules: async (agentId) => {
+    const items = await api.schedules.list(agentId)
+    set((s) => ({ schedules: { ...s.schedules, [agentId]: items } }))
+  },
+
+  addSchedule: async (agentId, data) => {
+    const item = await api.schedules.create(agentId, data)
+    set((s) => ({ schedules: { ...s.schedules, [agentId]: [...(s.schedules[agentId] ?? []), item] } }))
+  },
+
+  patchSchedule: async (agentId, id, data) => {
+    const item = await api.schedules.patch(agentId, id, data)
+    set((s) => ({
+      schedules: {
+        ...s.schedules,
+        [agentId]: (s.schedules[agentId] ?? []).map((sc) => (sc.id === id ? item : sc)),
+      },
+    }))
+  },
+
+  deleteSchedule: async (agentId, id) => {
+    await api.schedules.delete(agentId, id)
+    set((s) => ({
+      schedules: {
+        ...s.schedules,
+        [agentId]: (s.schedules[agentId] ?? []).filter((sc) => sc.id !== id),
+      },
+    }))
+  },
+
+  // ─── Workspace ──────────────────────────────────────────────────────────────
+
+  loadWorkspace: async () => {
+    const files = await api.workspace.list()
+    set({ workspaceFiles: files })
+  },
+
+  deleteWorkspaceFile: async (filePath) => {
+    await api.workspace.delete(filePath)
+    set((s) => ({ workspaceFiles: s.workspaceFiles.filter((f) => f.path !== filePath) }))
   },
 }))

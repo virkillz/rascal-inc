@@ -6,6 +6,7 @@ import Onboarding from './pages/Onboarding.tsx'
 import Roster from './pages/Roster.tsx'
 import AgentChat from './pages/AgentChat.tsx'
 import Settings from './pages/Settings.tsx'
+import Workspace from './pages/Workspace.tsx'
 import Layout from './components/Layout.tsx'
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/roster" element={<Roster />} />
             <Route path="/agents/:id" element={<AgentChat />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/workspace" element={<Workspace />} />
           </Route>
         </Routes>
       </BrowserRouter>

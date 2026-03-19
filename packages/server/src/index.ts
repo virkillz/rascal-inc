@@ -7,6 +7,7 @@ import { initDb } from './db.js'
 import { setDataDir } from './agent-runner.js'
 import { setEnvFilePath } from './api/settings.js'
 import { startServer } from './server.js'
+import { startScheduler } from './scheduler.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -75,12 +76,13 @@ async function cmdStart() {
   initDb(DATA_DIR)
   setDataDir(DATA_DIR)
   setEnvFilePath(ENV_FILE)
+  startScheduler()
 
   // Resolve web dist — look relative to this file in production
   const webDist = path.join(__dirname, '../../web/dist')
   const webDistDir = fs.existsSync(webDist) ? webDist : undefined
 
-  startServer(PORT, webDistDir)
+  startServer(PORT, webDistDir, WORKSPACE_DIR)
 
   console.log(chalk.dim(`  company dir  ${companyDir}`))
   console.log(chalk.dim(`  data         ${DATA_DIR}`))

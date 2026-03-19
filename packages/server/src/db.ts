@@ -54,6 +54,37 @@ function runMigrations(db: DB): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_chat_messages_agent ON chat_messages(agent_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS agent_memory (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id   TEXT    NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      content    TEXT    NOT NULL,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_memory_agent ON agent_memory(agent_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS agent_todos (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id     TEXT    NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      text         TEXT    NOT NULL,
+      completed    INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT,
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_todos_agent ON agent_todos(agent_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS agent_schedules (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id     TEXT    NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      cron         TEXT    NOT NULL,
+      prompt       TEXT    NOT NULL,
+      label        TEXT    NOT NULL DEFAULT '',
+      enabled      INTEGER NOT NULL DEFAULT 1,
+      last_run_at  TEXT,
+      next_run_at  TEXT,
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
   `)
 }
 
@@ -69,4 +100,46 @@ export function setSetting(key: string, value: string): void {
 
 export function isFirstRun(): boolean {
   return getSetting('company_name') === null
+}
+
+export interface MemoryRow {
+  id: number
+  agent_id: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TodoRow {
+  id: number
+  agent_id: string
+  text: string
+  completed: number
+  completed_at: string | null
+  created_at: string
+}
+
+export interface ScheduleRow {
+  id: number
+  agent_id: string
+  cron: string
+  prompt: string
+  label: string
+  enabled: number
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string
+}
+
+export function getAgentMemory(agentId: string): MemoryRow[] {
+  return getDb()
+    .prepare('SELECT * FROM agent_memory WHERE agent_id = ? ORDER BY created_at ASC')
+    .all(agentId) as unknown as MemoryRow[]
+}
+
+export function getAgentTodos(agentId: string, onlyOpen = false): TodoRow[] {
+  const query = onlyOpen
+    ? 'SELECT * FROM agent_todos WHERE agent_id = ? AND completed = 0 ORDER BY created_at ASC'
+    : 'SELECT * FROM agent_todos WHERE agent_id = ? ORDER BY created_at ASC'
+  return getDb().prepare(query).all(agentId) as unknown as TodoRow[]
 }

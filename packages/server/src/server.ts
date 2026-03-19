@@ -3,12 +3,17 @@ import cors from 'cors'
 import { createServer } from 'http'
 import path from 'path'
 import fs from 'fs'
-import { initWss } from './ws.js'
+import { initWss, broadcast } from './ws.js'
+import { eventBus } from './event-bus.js'
 import { createSettingsRouter } from './api/settings.js'
 import { createAgentsRouter } from './api/agents.js'
 import { createChatRouter } from './api/chat.js'
+import { createMemoryRouter } from './api/memory.js'
+import { createTodosRouter } from './api/todos.js'
+import { createSchedulesRouter } from './api/schedules.js'
+import { createWorkspaceRouter } from './api/workspace.js'
 
-export function createApp(opts: { webDistDir?: string } = {}) {
+export function createApp(opts: { webDistDir?: string; workspaceDir?: string } = {}) {
   const app = express()
 
   app.use(cors({ origin: 'http://localhost:5173' }))
@@ -17,6 +22,10 @@ export function createApp(opts: { webDistDir?: string } = {}) {
   app.use('/api/settings', createSettingsRouter())
   app.use('/api/agents', createAgentsRouter())
   app.use('/api/agents', createChatRouter())
+  app.use('/api/agents', createMemoryRouter())
+  app.use('/api/agents', createTodosRouter())
+  app.use('/api/agents', createSchedulesRouter())
+  app.use('/api/workspace', createWorkspaceRouter(opts.workspaceDir ?? process.cwd()))
 
   // Health check
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
@@ -32,10 +41,11 @@ export function createApp(opts: { webDistDir?: string } = {}) {
   return app
 }
 
-export function startServer(port: number, webDistDir?: string) {
-  const app = createApp({ webDistDir })
+export function startServer(port: number, webDistDir?: string, workspaceDir?: string) {
+  const app = createApp({ webDistDir, workspaceDir })
   const server = createServer(app)
   initWss(server)
+  eventBus.on((event) => broadcast(event))
 
   server.listen(port, () => {
     console.log(`  Server running at http://localhost:${port}`)

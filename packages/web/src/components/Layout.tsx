@@ -32,7 +32,7 @@ export default function Layout() {
 
         {/* Nav */}
         <nav className="flex-1 py-3 overflow-y-auto">
-          <div className="px-3 mb-1">
+          <div className="px-3 mb-1 space-y-0.5">
             <NavLink
               to="/roster"
               className={({ isActive }) =>
@@ -44,6 +44,18 @@ export default function Layout() {
             >
               <GridIcon />
               <span>Roster</span>
+            </NavLink>
+            <NavLink
+              to="/workspace"
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                  isActive ? 'bg-surface-3' : 'hover:bg-surface-2'
+                }`
+              }
+              style={({ isActive }) => ({ color: isActive ? 'var(--text-primary)' : 'var(--muted)' })}
+            >
+              <FolderIcon />
+              <span>Workspace</span>
             </NavLink>
           </div>
 
@@ -115,6 +127,14 @@ function GridIcon() {
   return (
     <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zm0 9.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zm9.75-9.75A2.25 2.25 0 0115.75 3.75H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zm0 9.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+    </svg>
+  )
+}
+
+function FolderIcon() {
+  return (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
     </svg>
   )
 }

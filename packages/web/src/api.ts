@@ -62,6 +62,62 @@ export const api = {
       req<{ reply: string }>('POST', `/agents/${agentId}/chat`, { message }),
     clear: (agentId: string) => req<{ ok: boolean }>('DELETE', `/agents/${agentId}/chat`),
   },
+
+  // ─── Memory ───────────────────────────────────────────────────────────────
+
+  memory: {
+    list:   (agentId: string) => req<MemoryEntry[]>('GET', `/agents/${agentId}/memory`),
+    create: (agentId: string, content: string) =>
+      req<MemoryEntry>('POST', `/agents/${agentId}/memory`, { content }),
+    update: (agentId: string, id: number, content: string) =>
+      req<MemoryEntry>('PUT', `/agents/${agentId}/memory/${id}`, { content }),
+    delete: (agentId: string, id: number) =>
+      req<{ ok: boolean }>('DELETE', `/agents/${agentId}/memory/${id}`),
+  },
+
+  // ─── Todos ────────────────────────────────────────────────────────────────
+
+  todos: {
+    list:   (agentId: string) => req<TodoItem[]>('GET', `/agents/${agentId}/todos`),
+    create: (agentId: string, text: string) =>
+      req<TodoItem>('POST', `/agents/${agentId}/todos`, { text }),
+    patch:  (agentId: string, id: number, data: { completed?: boolean; text?: string }) =>
+      req<TodoItem>('PATCH', `/agents/${agentId}/todos/${id}`, data),
+    delete: (agentId: string, id: number) =>
+      req<{ ok: boolean }>('DELETE', `/agents/${agentId}/todos/${id}`),
+  },
+
+  // ─── Schedules ────────────────────────────────────────────────────────────
+
+  schedules: {
+    list:   (agentId: string) => req<Schedule[]>('GET', `/agents/${agentId}/schedules`),
+    create: (agentId: string, data: { cron: string; prompt: string; label?: string }) =>
+      req<Schedule>('POST', `/agents/${agentId}/schedules`, data),
+    patch:  (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) =>
+      req<Schedule>('PATCH', `/agents/${agentId}/schedules/${id}`, data),
+    delete: (agentId: string, id: number) =>
+      req<{ ok: boolean }>('DELETE', `/agents/${agentId}/schedules/${id}`),
+  },
+
+  // ─── Workspace ────────────────────────────────────────────────────────────
+
+  workspace: {
+    list: () => req<FileEntry[]>('GET', '/workspace'),
+    downloadUrl: (filePath: string) => `${BASE}/workspace/download?path=${encodeURIComponent(filePath)}`,
+    upload: (file: File, agentId?: string) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const url = agentId
+        ? `${BASE}/workspace/upload?agentId=${encodeURIComponent(agentId)}`
+        : `${BASE}/workspace/upload`
+      return fetch(url, { method: 'POST', body: fd }).then((r) => {
+        if (!r.ok) throw new Error('Upload failed')
+        return r.json() as Promise<FileEntry>
+      })
+    },
+    delete: (filePath: string) =>
+      req<{ ok: boolean }>('DELETE', `/workspace?path=${encodeURIComponent(filePath)}`),
+  },
 }
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -94,4 +150,43 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   created_at: string
+}
+
+export interface MemoryEntry {
+  id: number
+  agent_id: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TodoItem {
+  id: number
+  agent_id: string
+  text: string
+  completed: number
+  completed_at: string | null
+  created_at: string
+}
+
+export interface Schedule {
+  id: number
+  agent_id: string
+  cron: string
+  prompt: string
+  label: string
+  enabled: number
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string
+}
+
+export interface FileEntry {
+  path: string
+  name: string
+  size_bytes: number
+  mime_type: string
+  uploaded_by: string | null
+  created_at: string
+  updated_at: string
 }

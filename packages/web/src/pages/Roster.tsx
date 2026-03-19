@@ -1,11 +1,18 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.ts'
+import { useAppEvents } from '../hooks/useAppEvents.ts'
 import type { Agent, CreateAgentInput } from '../api.ts'
 
 export default function Roster() {
-  const { agents, addAgent, deleteAgent } = useStore()
+  const { agents, addAgent, deleteAgent, agentStatus, setAgentStatus } = useStore()
   const navigate = useNavigate()
+
+  useAppEvents((event) => {
+    if (event.type === 'agent:thinking') setAgentStatus(event.agentId, 'thinking')
+    else if (event.type === 'agent:idle') setAgentStatus(event.agentId, 'idle')
+    else if (event.type === 'agent:error') setAgentStatus(event.agentId, 'error')
+  })
   const [showAdd, setShowAdd] = useState(agents.length === 0)
 
   return (
@@ -34,6 +41,7 @@ export default function Roster() {
               <AgentCard
                 key={agent.id}
                 agent={agent}
+                status={agentStatus[agent.id]}
                 onClick={() => navigate(`/agents/${agent.id}`)}
                 onDelete={agent.source === 'user' ? () => deleteAgent(agent.id) : undefined}
               />
@@ -58,8 +66,15 @@ export default function Roster() {
   )
 }
 
-function AgentCard({ agent, onClick, onDelete }: {
+const STATUS_DOT: Record<string, string> = {
+  thinking: 'bg-amber-400 animate-pulse',
+  error: 'bg-red-400',
+  idle: 'bg-green-400',
+}
+
+function AgentCard({ agent, status, onClick, onDelete }: {
   agent: Agent
+  status?: 'idle' | 'thinking' | 'error'
   onClick: () => void
   onDelete?: () => void
 }) {
@@ -103,11 +118,16 @@ function AgentCard({ agent, onClick, onDelete }: {
       )}
 
       {/* Avatar */}
-      <div
-        className="w-11 h-11 rounded-xl flex items-center justify-center text-lg font-bold text-white mb-4"
-        style={{ backgroundColor: agent.avatar_color + '33', border: `1px solid ${agent.avatar_color}66` }}
-      >
-        <span style={{ color: agent.avatar_color }}>{agent.name[0].toUpperCase()}</span>
+      <div className="relative w-11 h-11 mb-4">
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center text-lg font-bold text-white"
+          style={{ backgroundColor: agent.avatar_color + '33', border: `1px solid ${agent.avatar_color}66` }}
+        >
+          <span style={{ color: agent.avatar_color }}>{agent.name[0].toUpperCase()}</span>
+        </div>
+        {status && (
+          <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-surface-1 ${STATUS_DOT[status] ?? 'bg-surface-3'}`} />
+        )}
       </div>
 
       <div className="text-sm font-semibold text-white">{agent.name}</div>

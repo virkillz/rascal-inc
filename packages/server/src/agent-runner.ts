@@ -8,6 +8,8 @@ import {
   type AgentSessionEvent,
 } from '@mariozechner/pi-coding-agent'
 import path from 'path'
+import { getAgentMemory, getAgentTodos } from './db.js'
+import { eventBus } from './event-bus.js'
 
 export interface ModelConfig {
   provider: string
@@ -44,7 +46,18 @@ export function setDataDir(dir: string): void {
 function buildSystemPrompt(agent: AgentRecord): string {
   const base = agent.system_prompt.trim()
   const header = `You are ${agent.name}, ${agent.role} at this company.`
-  return base ? `${header}\n\n${base}` : header
+
+  const memories = getAgentMemory(agent.id)
+  const todos = getAgentTodos(agent.id, true)
+
+  const memoryBlock = memories.length
+    ? `## Your Memory\n${memories.map((m) => `- ${m.content}`).join('\n')}`
+    : ''
+  const todoBlock = todos.length
+    ? `## Your Open Todos\n${todos.map((t) => `- [ ] ${t.text}`).join('\n')}`
+    : ''
+
+  return [header, base, memoryBlock, todoBlock].filter(Boolean).join('\n\n')
 }
 
 function resolveModelConfig(modelConfigJson: string, defaultConfig: ModelConfig): ModelConfig {
@@ -88,7 +101,11 @@ async function createLiveSession(agent: AgentRecord, defaultModel: ModelConfig):
     const p = pending.get(agent.id)
     if (!p) return
     if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
-      p.chunks.push(event.assistantMessageEvent.delta)
+      const delta = event.assistantMessageEvent.delta
+      p.chunks.push(delta)
+      if (p.chunks.length === 1) {
+        eventBus.emit({ type: 'agent:reply', agentId: agent.id, preview: delta.slice(0, 80) })
+      }
     }
   })
 
@@ -110,6 +127,8 @@ export async function chatWithAgent(
 
   const live = liveSessions.get(agent.id)!
 
+  eventBus.emit({ type: 'agent:thinking', agentId: agent.id })
+
   return new Promise((resolve, reject) => {
     pending.set(agent.id, { chunks: [], resolve })
 
@@ -118,12 +137,15 @@ export async function chatWithAgent(
       .then(() => {
         const p = pending.get(agent.id)
         pending.delete(agent.id)
-        resolve(p?.chunks.join('') ?? '')
+        const text = p?.chunks.join('') ?? ''
+        eventBus.emit({ type: 'agent:idle', agentId: agent.id })
+        resolve(text)
       })
       .catch((err: unknown) => {
         pending.delete(agent.id)
-        // Kill the broken session so it gets recreated next time
         liveSessions.delete(agent.id)
+        const msg = err instanceof Error ? err.message : String(err)
+        eventBus.emit({ type: 'agent:error', agentId: agent.id, error: msg })
         reject(err)
       })
   })
