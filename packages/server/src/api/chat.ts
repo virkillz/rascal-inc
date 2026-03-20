@@ -82,5 +82,25 @@ export function createChatRouter(): Router {
     res.json({ ok: true })
   })
 
+  // PATCH /api/agents/:id/chat/:msgId — edit a message
+  router.patch('/:id/chat/:msgId', (req, res) => {
+    const { content } = req.body as { content: string }
+    if (!content?.trim()) return res.status(400).json({ error: 'content required' })
+    const result = getDb()
+      .prepare('UPDATE chat_messages SET content = ? WHERE id = ? AND agent_id = ?')
+      .run(content.trim(), req.params.msgId, req.params.id) as { changes: number }
+    if (result.changes === 0) return res.status(404).json({ error: 'Message not found' })
+    res.json({ ok: true })
+  })
+
+  // DELETE /api/agents/:id/chat/:msgId — delete a single message
+  router.delete('/:id/chat/:msgId', (req, res) => {
+    const result = getDb()
+      .prepare('DELETE FROM chat_messages WHERE id = ? AND agent_id = ?')
+      .run(req.params.msgId, req.params.id) as { changes: number }
+    if (result.changes === 0) return res.status(404).json({ error: 'Message not found' })
+    res.json({ ok: true })
+  })
+
   return router
 }

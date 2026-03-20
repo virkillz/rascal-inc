@@ -247,6 +247,26 @@ export function createChannelsRouter(): Router {
     res.status(201).json({ id: msgId })
   })
 
+  // PATCH /api/channels/:id/messages/:msgId — edit a message
+  router.patch('/:id/messages/:msgId', requireAuth, (req, res) => {
+    const { content } = req.body as { content: string }
+    if (!content?.trim()) return res.status(400).json({ error: 'content required' })
+    const result = getDb()
+      .prepare('UPDATE channel_messages SET content = ? WHERE id = ? AND channel_id = ?')
+      .run(content.trim(), req.params.msgId, req.params.id) as { changes: number }
+    if (result.changes === 0) return res.status(404).json({ error: 'Message not found' })
+    res.json({ ok: true })
+  })
+
+  // DELETE /api/channels/:id/messages/:msgId — delete a single message
+  router.delete('/:id/messages/:msgId', requireAuth, (req, res) => {
+    const result = getDb()
+      .prepare('DELETE FROM channel_messages WHERE id = ? AND channel_id = ?')
+      .run(req.params.msgId, req.params.id) as { changes: number }
+    if (result.changes === 0) return res.status(404).json({ error: 'Message not found' })
+    res.json({ ok: true })
+  })
+
   // GET /api/channels/public — convenience shortcut
   router.get('/public', requireAuth, (_req, res) => {
     try {

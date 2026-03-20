@@ -193,7 +193,16 @@ export default function AgentChat() {
               )}
 
               {messages.map((msg) => (
-                <MessageBubble key={msg.id} msg={msg} agentName={agent.name} agentColor={agent.avatar_color} agentAvatarUrl={agent.avatar_url} />
+                <MessageBubble
+                  key={msg.id}
+                  msg={msg}
+                  agentName={agent.name}
+                  agentColor={agent.avatar_color}
+                  agentAvatarUrl={agent.avatar_url}
+                  agentId={agent.id}
+                  onDelete={(msgId) => setMessages((prev) => prev.filter((m) => m.id !== msgId))}
+                  onEdit={(msgId, content) => setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content } : m))}
+                />
               ))}
 
               {sending && (
@@ -250,7 +259,7 @@ export default function AgentChat() {
                   autoFocus
                 />
                 <button
-                  className="flex-shrink-0 w-8 h-8 bg-accent hover:bg-accent-dim rounded-lg flex items-center justify-center transition-colors disabled:opacity-40"
+                  className="flex-shrink-0 w-8 h-8 bg-accent hover:bg-accent-hover rounded-lg flex items-center justify-center transition-colors disabled:opacity-40"
                   onClick={send}
                   disabled={!input.trim() || sending}
                 >
@@ -944,17 +953,102 @@ function SkillsTab({ agent, onSave }: { agent: Agent; onSave: (data: { modelConf
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, agentName, agentColor, agentAvatarUrl }: {
+function MessageBubble({ msg, agentName, agentColor, agentAvatarUrl, agentId, onDelete, onEdit }: {
   msg: ChatMessage
   agentName: string
   agentColor: string
   agentAvatarUrl?: string
+  agentId: string
+  onDelete: (msgId: number) => void
+  onEdit: (msgId: number, content: string) => void
 }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(msg.content)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function handler(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
+
+  async function handleDelete() {
+    setMenuOpen(false)
+    await api.chat.deleteMessage(agentId, msg.id)
+    onDelete(msg.id)
+  }
+
+  async function handleEditSave() {
+    if (!editValue.trim() || editValue.trim() === msg.content) { setEditing(false); return }
+    await api.chat.editMessage(agentId, msg.id, editValue.trim())
+    onEdit(msg.id, editValue.trim())
+    setEditing(false)
+  }
+
+  const menu = (
+    <div className="relative flex-shrink-0" ref={menuRef}>
+      <button
+        onClick={() => setMenuOpen((v) => !v)}
+        className="opacity-30 hover:opacity-100 p-1 rounded transition-opacity hover:bg-white/10"
+        style={{ color: 'var(--muted)' }}
+        title="Message options"
+      >
+        <DotsVerticalIcon />
+      </button>
+      {menuOpen && (
+        <div
+          className="absolute z-50 right-0 top-6 w-32 rounded-xl shadow-2xl overflow-hidden"
+          style={{ background: 'rgba(8,18,40,0.97)', border: '1px solid rgba(255,255,255,0.12)' }}
+        >
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-white/8 transition-colors"
+            style={{ color: 'var(--text-primary)' }}
+            onClick={() => { setEditing(true); setEditValue(msg.content); setMenuOpen(false) }}
+          >
+            <PencilIcon /> Edit
+          </button>
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-red-500/15 transition-colors"
+            style={{ color: '#f87171' }}
+            onClick={handleDelete}
+          >
+            <TrashIcon /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[70%] rounded-2xl rounded-tr-sm px-4 py-3" style={{ background: 'rgba(245,158,11,0.28)', border: '1px solid rgba(245,158,11,0.55)' }}>
-          <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{msg.content}</p>
+        <div className="flex items-start gap-1">
+          <div className="self-start mt-1">{menu}</div>
+          <div className="max-w-[70%] rounded-2xl rounded-tr-sm px-4 py-3" style={{ background: 'rgba(245,158,11,0.28)', border: '1px solid rgba(245,158,11,0.55)' }}>
+            {editing ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  className="bg-transparent text-sm resize-none outline-none w-full min-w-[20rem]"
+                  style={{ color: 'var(--text-primary)', minHeight: '4rem' }}
+                  value={editValue}
+                  rows={Math.max(3, editValue.split('\n').length)}
+                  autoFocus
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSave() } if (e.key === 'Escape') setEditing(false) }}
+                />
+                <div className="flex gap-1.5 justify-end">
+                  <button className="text-[10px] px-2 py-1 rounded hover:bg-white/10 transition-colors" style={{ color: 'var(--muted)' }} onClick={() => setEditing(false)}>Cancel</button>
+                  <button className="text-[10px] px-2 py-1 rounded bg-accent hover:bg-accent-hover text-white transition-colors" onClick={handleEditSave}>Save</button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{msg.content}</p>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -975,13 +1069,40 @@ function MessageBubble({ msg, agentName, agentColor, agentAvatarUrl }: {
         className="max-w-[70%] rounded-2xl rounded-tl-sm px-4 py-3"
         style={{ background: 'rgba(30,50,90,0.90)', border: '1px solid rgba(255,255,255,0.15)' }}
       >
-        <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{msg.content}</p>
+        {editing ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              className="bg-transparent text-sm resize-none outline-none w-full"
+              style={{ color: 'var(--text-primary)', minWidth: '12rem' }}
+              value={editValue}
+              rows={2}
+              autoFocus
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSave() } if (e.key === 'Escape') setEditing(false) }}
+            />
+            <div className="flex gap-1.5 justify-end">
+              <button className="text-[10px] px-2 py-1 rounded hover:bg-white/10 transition-colors" style={{ color: 'var(--muted)' }} onClick={() => setEditing(false)}>Cancel</button>
+              <button className="text-[10px] px-2 py-1 rounded bg-accent hover:bg-accent-hover text-white transition-colors" onClick={handleEditSave}>Save</button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{msg.content}</p>
+        )}
       </div>
+      <div className="self-start mt-1">{menu}</div>
     </div>
   )
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
+
+function DotsVerticalIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+    </svg>
+  )
+}
 
 function SendIcon() {
   return (

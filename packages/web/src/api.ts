@@ -99,6 +99,10 @@ export const api = {
     send: (agentId: string, message: string) =>
       req<{ reply: string }>('POST', `/agents/${agentId}/chat`, { message }),
     clear: (agentId: string) => req<{ ok: boolean }>('DELETE', `/agents/${agentId}/chat`),
+    editMessage: (agentId: string, msgId: number, content: string) =>
+      req<{ ok: boolean }>('PATCH', `/agents/${agentId}/chat/${msgId}`, { content }),
+    deleteMessage: (agentId: string, msgId: number) =>
+      req<{ ok: boolean }>('DELETE', `/agents/${agentId}/chat/${msgId}`),
   },
 
   // ─── Memory ───────────────────────────────────────────────────────────────
@@ -214,6 +218,10 @@ export const api = {
     getDm: (partnerId: string) => req<Channel>('GET', `/channels/dm/${partnerId}`),
     sendDm: (channelId: string, content: string) =>
       req<{ id: number }>('POST', `/channels/dm/${channelId}/messages`, { content }),
+    editMessage: (channelId: string, msgId: number, content: string) =>
+      req<{ ok: boolean }>('PATCH', `/channels/${channelId}/messages/${msgId}`, { content }),
+    deleteMessage: (channelId: string, msgId: number) =>
+      req<{ ok: boolean }>('DELETE', `/channels/${channelId}/messages/${msgId}`),
   },
 }
 

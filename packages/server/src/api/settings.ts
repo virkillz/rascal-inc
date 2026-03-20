@@ -139,7 +139,7 @@ export function createSettingsRouter(): Router {
     if (!modelId) return res.status(400).json({ error: 'No default model for provider' })
 
     try {
-      const model = getModel(provider.id as Parameters<typeof getModel>[0], modelId)
+      const model = getModel(provider.id as any, modelId)
       if (!model) return res.status(400).json({ ok: false, error: 'Model not found' })
       // Just checking the model resolves — actual API call would require a full session
       res.json({ ok: true })

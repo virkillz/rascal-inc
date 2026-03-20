@@ -3,6 +3,67 @@ import { useParams } from 'react-router-dom'
 import { api, type Channel, type ChannelMessage, type Agent, type User } from '../api.ts'
 import { useStore } from '../store.ts'
 
+// ─── Message menu ─────────────────────────────────────────────────────────────
+
+function MessageMenu({ msg, channelId, onDelete, onEditStart }: {
+  msg: ChannelMessage
+  channelId: string
+  onDelete: (msgId: number) => void
+  onEditStart: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  async function handleDelete() {
+    setOpen(false)
+    await api.channels.deleteMessage(channelId, msg.id)
+    onDelete(msg.id)
+  }
+
+  return (
+    <div className="relative flex-shrink-0" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="opacity-30 hover:opacity-100 p-1 rounded transition-opacity hover:bg-white/10"
+        style={{ color: 'var(--muted)' }}
+        title="Message options"
+      >
+        <DotsVerticalIcon />
+      </button>
+      {open && (
+        <div
+          className="absolute z-50 right-0 top-6 w-32 rounded-xl shadow-2xl overflow-hidden"
+          style={{ background: 'rgba(8,18,40,0.97)', border: '1px solid rgba(255,255,255,0.12)' }}
+        >
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-white/8 transition-colors"
+            style={{ color: 'var(--text-primary)' }}
+            onClick={() => { onEditStart(); setOpen(false) }}
+          >
+            <PencilIcon /> Edit
+          </button>
+          <button
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-red-500/15 transition-colors"
+            style={{ color: '#f87171' }}
+            onClick={handleDelete}
+          >
+            <TrashIcon /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Channels() {
   const { id: paramId } = useParams<{ id?: string }>()
   const { agents } = useStore()
@@ -15,6 +76,8 @@ export default function Channels() {
   const [showMembers, setShowMembers] = useState(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
+  const [editingMsgId, setEditingMsgId] = useState<number | null>(null)
+  const [editValue, setEditValue] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const membersRef = useRef<HTMLDivElement>(null)
@@ -347,23 +410,59 @@ export default function Channels() {
                 const sameSenderAsPrev = prevMsg &&
                   prevMsg.sender_id === msg.sender_id &&
                   prevMsg.sender_type === msg.sender_type
+                const isEditing = editingMsgId === msg.id
+
+                async function saveEdit() {
+                  if (!editValue.trim() || editValue.trim() === msg.content) { setEditingMsgId(null); return }
+                  await api.channels.editMessage(activeChannel!.id, msg.id, editValue.trim())
+                  setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, content: editValue.trim() } : m))
+                  setEditingMsgId(null)
+                }
 
                 if (own) {
                   return (
                     <div key={msg.id} className="flex justify-end">
-                      <div className="max-w-[70%]">
-                        {!sameSenderAsPrev && (
-                          <p className="text-[10px] text-muted text-right mb-1 mr-1">
-                            You · {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        )}
-                        <div
-                          className="rounded-2xl rounded-tr-sm px-4 py-2.5"
-                          style={{ background: 'rgba(245,158,11,0.28)', border: '1px solid rgba(245,158,11,0.55)' }}
-                        >
-                          <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                            {msg.content}
-                          </p>
+                      <div className="flex items-start gap-1">
+                        <div className="self-start mt-1">
+                          <MessageMenu
+                            msg={msg}
+                            channelId={activeChannel!.id}
+                            onDelete={(id) => setMessages((prev) => prev.filter((m) => m.id !== id))}
+                            onEditStart={() => { setEditingMsgId(msg.id); setEditValue(msg.content) }}
+                          />
+                        </div>
+                        <div className="max-w-[70%]">
+                          {!sameSenderAsPrev && (
+                            <p className="text-[10px] text-muted text-right mb-1 mr-1">
+                              You · {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                          <div
+                            className="rounded-2xl rounded-tr-sm px-4 py-2.5"
+                            style={{ background: 'rgba(245,158,11,0.28)', border: '1px solid rgba(245,158,11,0.55)' }}
+                          >
+                            {isEditing ? (
+                              <div className="flex flex-col gap-2">
+                                <textarea
+                                  className="bg-transparent text-sm resize-none outline-none w-full min-w-[20rem]"
+                                  style={{ color: 'var(--text-primary)', minHeight: '4rem' }}
+                                  value={editValue}
+                                  rows={Math.max(3, editValue.split('\n').length)}
+                                  autoFocus
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() } if (e.key === 'Escape') setEditingMsgId(null) }}
+                                />
+                                <div className="flex gap-1.5 justify-end">
+                                  <button className="text-[10px] px-2 py-1 rounded hover:bg-white/10 transition-colors" style={{ color: 'var(--muted)' }} onClick={() => setEditingMsgId(null)}>Cancel</button>
+                                  <button className="text-[10px] px-2 py-1 rounded bg-accent hover:bg-accent-hover text-white transition-colors" onClick={saveEdit}>Save</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                                {msg.content}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -405,10 +504,36 @@ export default function Channels() {
                         className="rounded-2xl rounded-tl-sm px-4 py-2.5"
                         style={{ background: 'rgba(30,50,90,0.90)', border: '1px solid rgba(255,255,255,0.15)' }}
                       >
-                        <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                          {msg.content}
-                        </p>
+                        {isEditing ? (
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              className="bg-transparent text-sm resize-none outline-none w-full min-w-[20rem]"
+                              style={{ color: 'var(--text-primary)', minHeight: '4rem' }}
+                              value={editValue}
+                              rows={Math.max(3, editValue.split('\n').length)}
+                              autoFocus
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() } if (e.key === 'Escape') setEditingMsgId(null) }}
+                            />
+                            <div className="flex gap-1.5 justify-end">
+                              <button className="text-[10px] px-2 py-1 rounded hover:bg-white/10 transition-colors" style={{ color: 'var(--muted)' }} onClick={() => setEditingMsgId(null)}>Cancel</button>
+                              <button className="text-[10px] px-2 py-1 rounded bg-accent hover:bg-accent-hover text-white transition-colors" onClick={saveEdit}>Save</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                            {msg.content}
+                          </p>
+                        )}
                       </div>
+                    </div>
+                    <div className="self-start mt-1">
+                      <MessageMenu
+                        msg={msg}
+                        channelId={activeChannel!.id}
+                        onDelete={(id) => setMessages((prev) => prev.filter((m) => m.id !== id))}
+                        onEditStart={() => { setEditingMsgId(msg.id); setEditValue(msg.content) }}
+                      />
                     </div>
                   </div>
                 )
@@ -510,6 +635,30 @@ function SendIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+    </svg>
+  )
+}
+
+function DotsVerticalIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+    </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
     </svg>
   )
 }
