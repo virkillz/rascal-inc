@@ -11,7 +11,7 @@ function getBoardFull(boardId: string) {
   const board = db.prepare('SELECT * FROM boards WHERE id = ?').get(boardId) as unknown as BoardRow | undefined
   if (!board) return null
   const lanes = db.prepare('SELECT * FROM lanes WHERE board_id = ? ORDER BY position ASC').all(boardId) as unknown as LaneRow[]
-  const cards = db.prepare('SELECT * FROM cards WHERE board_id = ? ORDER BY position ASC').all(boardId) as unknown as CardRow[]
+  const cards = db.prepare('SELECT * FROM cards WHERE board_id = ? AND is_archived = 0 ORDER BY position ASC').all(boardId) as unknown as CardRow[]
   const rules = db.prepare(`
     SELECT lr.* FROM lane_rules lr
     JOIN lanes l ON l.id = lr.lane_id
@@ -94,9 +94,14 @@ export function createBoardsRouter(): Router {
     if (!name?.trim()) return res.status(400).json({ error: 'name required' })
     const id = randomUUID()
     getDb().prepare('INSERT INTO boards (id, name) VALUES (?, ?)').run(id, name.trim())
-    // Seed default lanes
-    ;['Todo', 'Doing', 'Done'].forEach((laneName, i) => {
-      getDb().prepare('INSERT INTO lanes (id, board_id, name, position) VALUES (?, ?, ?, ?)').run(randomUUID(), id, laneName, i)
+    // Seed default lanes with types
+    const defaultLanes: { name: string; type: string }[] = [
+      { name: 'Todo', type: 'todo' },
+      { name: 'Doing', type: 'in_progress' },
+      { name: 'Done', type: 'done' },
+    ]
+    defaultLanes.forEach(({ name, type }, i) => {
+      getDb().prepare('INSERT INTO lanes (id, board_id, name, position, lane_type) VALUES (?, ?, ?, ?, ?)').run(randomUUID(), id, name, i, type)
     })
     res.status(201).json(getBoardFull(id))
   })
@@ -120,13 +125,21 @@ export function createBoardsRouter(): Router {
 
   // POST /api/boards/:id/lanes (admin only)
   router.post('/:id/lanes', requireAdmin, (req: AuthRequest, res) => {
-    const { name, position } = req.body as { name?: string; position?: number }
+    const { name, position, laneType } = req.body as { name?: string; position?: number; laneType?: string }
     if (!name?.trim()) return res.status(400).json({ error: 'name required' })
     const board = getDb().prepare('SELECT id FROM boards WHERE id = ?').get(req.params.id)
     if (!board) return res.status(404).json({ error: 'Board not found' })
+    const resolvedType = laneType ?? 'in_progress'
+    if (!['todo', 'in_progress', 'done'].includes(resolvedType)) {
+      return res.status(400).json({ error: 'laneType must be todo | in_progress | done' })
+    }
+    if (resolvedType === 'todo' || resolvedType === 'done') {
+      const existing = getDb().prepare('SELECT id FROM lanes WHERE board_id = ? AND lane_type = ?').get(req.params.id, resolvedType)
+      if (existing) return res.status(409).json({ error: `A ${resolvedType} lane already exists on this board` })
+    }
     const pos = position ?? (getDb().prepare('SELECT COUNT(*) as c FROM lanes WHERE board_id = ?').get(req.params.id) as { c: number }).c
     const id = randomUUID()
-    getDb().prepare('INSERT INTO lanes (id, board_id, name, position) VALUES (?, ?, ?, ?)').run(id, req.params.id, name.trim(), pos)
+    getDb().prepare('INSERT INTO lanes (id, board_id, name, position, lane_type) VALUES (?, ?, ?, ?, ?)').run(id, req.params.id, name.trim(), pos, resolvedType)
     res.status(201).json(getDb().prepare('SELECT * FROM lanes WHERE id = ?').get(id))
   })
 
@@ -134,10 +147,18 @@ export function createBoardsRouter(): Router {
   router.put('/:boardId/lanes/:laneId', requireAdmin, (req: AuthRequest, res) => {
     const lane = getDb().prepare('SELECT * FROM lanes WHERE id = ? AND board_id = ?').get(req.params.laneId, req.params.boardId) as LaneRow | undefined
     if (!lane) return res.status(404).json({ error: 'Lane not found' })
-    const { name, position } = req.body as { name?: string; position?: number }
+    const { name, position, laneType } = req.body as { name?: string; position?: number; laneType?: string }
+    const resolvedType = laneType ?? lane.lane_type
+    if (!['todo', 'in_progress', 'done'].includes(resolvedType)) {
+      return res.status(400).json({ error: 'laneType must be todo | in_progress | done' })
+    }
+    if (laneType && laneType !== lane.lane_type && (laneType === 'todo' || laneType === 'done')) {
+      const existing = getDb().prepare('SELECT id FROM lanes WHERE board_id = ? AND lane_type = ? AND id != ?').get(req.params.boardId, laneType, lane.id)
+      if (existing) return res.status(409).json({ error: `A ${laneType} lane already exists on this board` })
+    }
     getDb()
-      .prepare('UPDATE lanes SET name = ?, position = ? WHERE id = ?')
-      .run(name?.trim() ?? lane.name, position ?? lane.position, lane.id)
+      .prepare('UPDATE lanes SET name = ?, position = ?, lane_type = ? WHERE id = ?')
+      .run(name?.trim() ?? lane.name, position ?? lane.position, resolvedType, lane.id)
     res.json(getDb().prepare('SELECT * FROM lanes WHERE id = ?').get(lane.id))
   })
 
@@ -281,6 +302,32 @@ export function createBoardsRouter(): Router {
     insertEvent(card.id, req.params.boardId, req.user!.id, 'user', 'deleted', { title: card.title })
     getDb().prepare('DELETE FROM cards WHERE id = ?').run(req.params.cardId)
     res.json({ ok: true })
+  })
+
+  // POST /api/boards/:boardId/cards/:cardId/archive
+  router.post('/:boardId/cards/:cardId/archive', requireAuth, (req: AuthRequest, res) => {
+    const card = getDb().prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(req.params.cardId, req.params.boardId) as unknown as CardRow | undefined
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+    getDb().prepare(`UPDATE cards SET is_archived = 1, updated_at = datetime('now') WHERE id = ?`).run(card.id)
+    insertEvent(card.id, req.params.boardId, req.user!.id, 'user', 'archived', { title: card.title })
+    res.json({ ok: true })
+  })
+
+  // POST /api/boards/:boardId/cards/:cardId/unarchive
+  router.post('/:boardId/cards/:cardId/unarchive', requireAuth, (req: AuthRequest, res) => {
+    const card = getDb().prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(req.params.cardId, req.params.boardId) as unknown as CardRow | undefined
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+    getDb().prepare(`UPDATE cards SET is_archived = 0, updated_at = datetime('now') WHERE id = ?`).run(card.id)
+    insertEvent(card.id, req.params.boardId, req.user!.id, 'user', 'unarchived', { title: card.title })
+    res.json(getDb().prepare('SELECT * FROM cards WHERE id = ?').get(card.id))
+  })
+
+  // GET /api/boards/:boardId/archived-cards
+  router.get('/:boardId/archived-cards', requireAuth, (req, res) => {
+    const cards = getDb()
+      .prepare('SELECT * FROM cards WHERE board_id = ? AND is_archived = 1 ORDER BY updated_at DESC')
+      .all(req.params.boardId) as unknown as CardRow[]
+    res.json(cards)
   })
 
   // ── Card events ───────────────────────────────────────────────────────────

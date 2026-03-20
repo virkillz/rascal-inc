@@ -151,10 +151,11 @@ function runMigrations(db: DB): void {
     );
 
     CREATE TABLE IF NOT EXISTS lanes (
-      id       TEXT PRIMARY KEY,
-      board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      name     TEXT NOT NULL,
-      position INTEGER NOT NULL DEFAULT 0
+      id        TEXT PRIMARY KEY,
+      board_id  TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      name      TEXT NOT NULL,
+      position  INTEGER NOT NULL DEFAULT 0,
+      lane_type TEXT NOT NULL DEFAULT 'in_progress'
     );
 
     CREATE TABLE IF NOT EXISTS cards (
@@ -169,6 +170,7 @@ function runMigrations(db: DB): void {
       created_by      TEXT NOT NULL,
       created_by_type TEXT NOT NULL,
       position        INTEGER NOT NULL DEFAULT 0,
+      is_archived     INTEGER NOT NULL DEFAULT 0,
       created_at      TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -237,6 +239,23 @@ function runMigrations(db: DB): void {
   addColumnIfNotExists(db, 'agents', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'agent_schedules', 'skip_if_no_todos', 'INTEGER NOT NULL DEFAULT 0')
   addColumnIfNotExists(db, 'cards', 'result', "TEXT NOT NULL DEFAULT ''")
+  addColumnIfNotExists(db, 'cards', 'is_archived', 'INTEGER NOT NULL DEFAULT 0')
+  addColumnIfNotExists(db, 'lanes', 'lane_type', "TEXT NOT NULL DEFAULT 'in_progress'")
+
+  // Assign lane types to existing boards that have none set yet.
+  // For each board where all lanes are still 'in_progress' (i.e. fresh migration),
+  // set the first lane (min position) to 'todo' and the last (max position) to 'done'.
+  const untypedBoards = db.prepare(`
+    SELECT DISTINCT board_id FROM lanes
+    WHERE board_id NOT IN (
+      SELECT DISTINCT board_id FROM lanes WHERE lane_type != 'in_progress'
+    )
+  `).all() as { board_id: string }[]
+  for (const { board_id } of untypedBoards) {
+    const lns = db.prepare('SELECT id FROM lanes WHERE board_id = ? ORDER BY position ASC').all(board_id) as { id: string }[]
+    if (lns.length >= 1) db.prepare("UPDATE lanes SET lane_type = 'todo' WHERE id = ?").run(lns[0].id)
+    if (lns.length >= 2) db.prepare("UPDATE lanes SET lane_type = 'done' WHERE id = ?").run(lns[lns.length - 1].id)
+  }
 }
 
 function seedInitialData(db: DB): void {
@@ -252,10 +271,14 @@ function seedInitialData(db: DB): void {
   if (boardCount === 0) {
     const boardId = randomUUID()
     db.prepare("INSERT INTO boards (id, name) VALUES (?, 'Main Board')").run(boardId)
-    const lanes = ['Todo', 'Doing', 'Done']
-    lanes.forEach((name, i) => {
-      db.prepare('INSERT INTO lanes (id, board_id, name, position) VALUES (?, ?, ?, ?)')
-        .run(randomUUID(), boardId, name, i)
+    const lanes: { name: string; type: 'todo' | 'in_progress' | 'done' }[] = [
+      { name: 'Todo', type: 'todo' },
+      { name: 'Doing', type: 'in_progress' },
+      { name: 'Done', type: 'done' },
+    ]
+    lanes.forEach(({ name, type }, i) => {
+      db.prepare('INSERT INTO lanes (id, board_id, name, position, lane_type) VALUES (?, ?, ?, ?, ?)')
+        .run(randomUUID(), boardId, name, i, type)
     })
   }
 
@@ -418,6 +441,7 @@ export interface LaneRow {
   board_id: string
   name: string
   position: number
+  lane_type: 'todo' | 'in_progress' | 'done'
 }
 
 export interface CardRow {
@@ -432,6 +456,7 @@ export interface CardRow {
   created_by: string
   created_by_type: string
   position: number
+  is_archived: number
   created_at: string
   updated_at: string
 }

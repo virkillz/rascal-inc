@@ -234,7 +234,7 @@ export async function chatWithAgent(
   return new Promise((resolve, reject) => {
     pending.set(agent.id, { chunks: [], resolve })
 
-    live.session.prompt(message)
+    live.session.prompt(message, { streamingBehavior: 'followUp' })
       .then(() => live.session.agent.waitForIdle())
       .then(() => {
         const p = pending.get(agent.id)

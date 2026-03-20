@@ -143,7 +143,7 @@ export function makeBoardListCardsTool(): ToolDefinition {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     execute: async (_id, params: any) => {
       const db = getDb()
-      let query = 'SELECT * FROM cards WHERE board_id = ?'
+      let query = 'SELECT * FROM cards WHERE board_id = ? AND is_archived = 0'
       const args: string[] = [params.boardId]
       if (params.laneId) { query += ' AND lane_id = ?'; args.push(params.laneId) }
       if (params.assigneeId) { query += ' AND assignee_id = ?'; args.push(params.assigneeId) }

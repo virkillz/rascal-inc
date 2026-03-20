@@ -186,8 +186,9 @@ export const api = {
     list: () => req<Board[]>('GET', '/boards'),
     get: (id: string) => req<BoardFull>('GET', `/boards/${id}`),
     create: (name: string) => req<BoardFull>('POST', '/boards', { name }),
-    addLane: (boardId: string, name: string) => req<Lane>('POST', `/boards/${boardId}/lanes`, { name }),
-    updateLane: (boardId: string, laneId: string, data: { name?: string; position?: number }) =>
+    addLane: (boardId: string, name: string, laneType?: 'todo' | 'in_progress' | 'done') =>
+      req<Lane>('POST', `/boards/${boardId}/lanes`, { name, laneType }),
+    updateLane: (boardId: string, laneId: string, data: { name?: string; position?: number; laneType?: 'todo' | 'in_progress' | 'done' }) =>
       req<Lane>('PUT', `/boards/${boardId}/lanes/${laneId}`, data),
     deleteLane: (boardId: string, laneId: string) =>
       req<{ ok: boolean }>('DELETE', `/boards/${boardId}/lanes/${laneId}`),
@@ -207,6 +208,12 @@ export const api = {
       req<{ ok: boolean }>('DELETE', `/boards/${boardId}/cards/${cardId}`),
     cardEvents: (boardId: string, cardId: string) =>
       req<CardEvent[]>('GET', `/boards/${boardId}/cards/${cardId}/events`),
+    archiveCard: (boardId: string, cardId: string) =>
+      req<{ ok: boolean }>('POST', `/boards/${boardId}/cards/${cardId}/archive`),
+    unarchiveCard: (boardId: string, cardId: string) =>
+      req<Card>('POST', `/boards/${boardId}/cards/${cardId}/unarchive`),
+    archivedCards: (boardId: string) =>
+      req<Card[]>('GET', `/boards/${boardId}/archived-cards`),
   },
 
   // ─── Channels ─────────────────────────────────────────────────────────────
@@ -355,6 +362,7 @@ export interface Lane {
   board_id: string
   name: string
   position: number
+  lane_type: 'todo' | 'in_progress' | 'done'
 }
 
 export interface Card {
@@ -369,6 +377,7 @@ export interface Card {
   created_by: string
   created_by_type: string
   position: number
+  is_archived: number
   created_at: string
   updated_at: string
 }
