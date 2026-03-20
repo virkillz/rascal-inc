@@ -7,6 +7,7 @@ import Onboarding from './pages/Onboarding.tsx'
 import Login from './pages/Login.tsx'
 import Roster from './pages/Roster.tsx'
 import AgentChat from './pages/AgentChat.tsx'
+import AgentSettings from './pages/AgentSettings.tsx'
 import Settings from './pages/Settings.tsx'
 import SettingsProvider from './pages/settings/Provider.tsx'
 import SettingsModel from './pages/settings/Model.tsx'
@@ -113,6 +114,7 @@ export default function App() {
             <Route path="/board" element={<Board />} />
             <Route path="/roster" element={<Roster />} />
             <Route path="/agents/:id" element={<AgentChat />} />
+            <Route path="/agents/:id/settings" element={<AgentSettings />} />
             <Route path="/workspace" element={<Workspace />} />
             <Route path="/settings" element={<Settings />}>
               <Route index element={<Navigate to="/settings/provider" replace />} />
