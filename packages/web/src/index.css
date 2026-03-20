@@ -11,8 +11,8 @@
     --s3: 24 44 80;          /* elevated/hover */
     --border: rgba(255,255,255,0.10);
     --accent: 245 158 11;    /* amber-500 */
-    --muted: #4a6890;
-    --subtle: #7aaad8;
+    --muted: #7a9ec0;
+    --subtle: #a8c8e8;
     --text-primary: #e8f2ff;
 
     --status-green: #4ade80;
@@ -162,3 +162,9 @@
   to   { transform: translateX(0);    opacity: 1; }
 }
 .animate-slide-in { animation: slide-in-right 0.25s ease-out forwards; }
+
+@keyframes zoom-in {
+  from { transform: scale(0.93); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.animate-zoom-in { animation: zoom-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) forwards; }

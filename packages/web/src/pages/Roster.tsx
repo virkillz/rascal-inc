@@ -108,23 +108,27 @@ export default function Roster() {
 
         {/* Hire AI form */}
         {hireMode === 'ai' && (
-          <HireForm
-            onAdd={async (data) => {
-              const agent = await addAgent(data)
-              setHireMode(null)
-              navigate(`/agents/${agent.id}`)
-            }}
-            onCancel={() => setHireMode(null)}
-            canCancel={agents.length > 0}
-          />
+          <div className="animate-zoom-in">
+            <HireForm
+              onAdd={async (data) => {
+                const agent = await addAgent(data)
+                setHireMode(null)
+                navigate(`/agents/${agent.id}`)
+              }}
+              onCancel={() => setHireMode(null)}
+              canCancel={agents.length > 0}
+            />
+          </div>
         )}
 
         {/* Hire Human form */}
         {hireMode === 'human' && (
-          <HireHumanForm
-            onDone={() => setHireMode(null)}
-            onCancel={() => setHireMode(null)}
-          />
+          <div className="animate-zoom-in">
+            <HireHumanForm
+              onDone={() => setHireMode(null)}
+              onCancel={() => setHireMode(null)}
+            />
+          </div>
         )}
       </div>
     </div>

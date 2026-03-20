@@ -97,10 +97,18 @@ export default function Channels() {
   }
 
   return (
-    <div className="flex h-full bg-surface-0">
+    <div className="flex h-full">
       {/* Channel list sidebar */}
-      <div className="w-48 flex-shrink-0 bg-surface-1 border-r border-border flex flex-col">
-        <div className="px-4 py-3 border-b border-border">
+      <div
+        className="w-48 flex-shrink-0 flex flex-col"
+        style={{
+          background: 'rgba(8, 18, 40, 0.72)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderRight: '1px solid rgba(255,255,255,0.10)',
+        }}
+      >
+        <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">Channels</span>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
@@ -109,11 +117,11 @@ export default function Channels() {
               key={ch.id}
               onClick={() => setActiveChannel(ch)}
               className={`w-full text-left flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
-                activeChannel?.id === ch.id ? 'bg-surface-3' : 'hover:bg-surface-2'
+                activeChannel?.id === ch.id ? 'bg-white/[0.08]' : 'hover:bg-white/5'
               }`}
               style={{ color: activeChannel?.id === ch.id ? 'var(--text-primary)' : 'var(--muted)' }}
             >
-              <span className="text-muted">#</span>
+              <span style={{ color: 'var(--muted)' }}>#</span>
               <span className="truncate">{ch.name}</span>
             </button>
           ))}
@@ -125,7 +133,15 @@ export default function Channels() {
         {activeChannel ? (
           <>
             {/* Channel header */}
-            <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
+            <div
+              className="px-5 py-3.5 flex items-center gap-2"
+              style={{
+                background: 'rgba(8, 18, 40, 0.60)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
               <span className="text-muted text-sm">#</span>
               <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{activeChannel.name}</span>
             </div>
@@ -146,13 +162,18 @@ export default function Channels() {
                         {senderName(msg)}
                       </span>
                       {msg.sender_type === 'agent' && (
-                        <span className="text-[10px] bg-accent/20 text-accent rounded px-1">AI</span>
+                        <span
+                          className="text-[10px] rounded px-1"
+                          style={{ background: 'rgba(245,158,11,0.15)', color: 'rgb(var(--accent))' }}
+                        >
+                          AI
+                        </span>
                       )}
                       <span className="text-[10px] text-muted">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="text-sm mt-0.5 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                    <p className="text-sm mt-0.5 whitespace-pre-wrap" style={{ color: 'var(--subtle)' }}>
                       {msg.content}
                     </p>
                   </div>
@@ -162,8 +183,22 @@ export default function Channels() {
             </div>
 
             {/* Input */}
-            <div className="px-5 py-4 border-t border-border">
-              <div className="flex items-end gap-3 bg-surface-1 border border-border rounded-xl px-3 py-2">
+            <div
+              className="px-5 py-4"
+              style={{
+                background: 'rgba(8, 18, 40, 0.60)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              <div
+                className="flex items-end gap-3 rounded-xl px-3 py-2"
+                style={{
+                  background: 'rgba(8, 18, 40, 0.70)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}

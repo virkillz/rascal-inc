@@ -126,7 +126,15 @@ export default function AgentChat() {
     <div className="flex h-full">
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-surface-1/50">
+        <div
+          className="flex items-center gap-3 px-6 py-4"
+          style={{
+            background: 'rgba(8, 18, 40, 0.72)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0"
             style={{ backgroundColor: agent.avatar_color + '33', border: `1px solid ${agent.avatar_color}66`, color: agent.avatar_color }}
@@ -142,7 +150,7 @@ export default function AgentChat() {
               <button
                 key={t}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  tab === t ? 'bg-surface-3' : 'hover:bg-surface-2'
+                  tab === t ? 'bg-white/[0.12]' : 'hover:bg-white/5'
                 }`}
                 style={{ color: tab === t ? 'var(--text-primary)' : 'var(--muted)' }}
                 onClick={() => setTab(t)}
@@ -189,11 +197,14 @@ export default function AgentChat() {
                   >
                     {agent.name[0].toUpperCase()}
                   </div>
-                  <div className="bg-surface-2 border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+                  <div
+                    className="rounded-2xl rounded-tl-sm px-4 py-3"
+                    style={{ background: 'rgba(8,18,40,0.70)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+                  >
                     <div className="flex gap-1 items-center h-4">
-                      <div className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:0ms]" />
-                      <div className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:150ms]" />
-                      <div className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce [animation-delay:300ms]" />
+                      <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0ms]" style={{ background: 'var(--muted)' }} />
+                      <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:150ms]" style={{ background: 'var(--muted)' }} />
+                      <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:300ms]" style={{ background: 'var(--muted)' }} />
                     </div>
                   </div>
                 </div>
@@ -209,7 +220,10 @@ export default function AgentChat() {
 
             {/* Input */}
             <div className="px-6 pb-6 pt-2">
-              <div className="flex items-end gap-3 bg-surface-2 border border-border rounded-xl px-4 py-3 focus-within:border-accent/50 transition-colors">
+              <div
+                className="flex items-end gap-3 rounded-xl px-4 py-3 transition-colors focus-within:ring-1 focus-within:ring-accent/40"
+                style={{ background: 'rgba(8,18,40,0.75)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
+              >
                 <textarea
                   ref={inputRef}
                   className="flex-1 bg-transparent text-sm placeholder-muted resize-none outline-none max-h-32 min-h-[20px]"
@@ -282,74 +296,76 @@ function MemoryTab({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 max-w-xl">
-      <p className="text-xs text-muted mb-4">
-        Memory entries are injected into {`this agent's`} system prompt and persist across sessions.
-      </p>
+    <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
+      <div className="w-full max-w-xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+        <p className="text-xs text-muted mb-4">
+          Memory entries are injected into {`this agent's`} system prompt and persist across sessions.
+        </p>
 
-      {/* Add new */}
-      <div className="flex gap-2 mb-6">
-        <textarea
-          className="input flex-1 resize-none text-sm"
-          rows={2}
-          placeholder="Add a memory entry..."
-          value={newContent}
-          onChange={(e) => setNewContent(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdd() } }}
-        />
-        <button
-          className="btn-primary self-end px-3 py-2 text-xs"
-          onClick={handleAdd}
-          disabled={!newContent.trim() || adding}
-        >
-          Add
-        </button>
-      </div>
+        {/* Add new */}
+        <div className="flex gap-2 mb-6">
+          <textarea
+            className="input flex-1 resize-none text-sm"
+            rows={2}
+            placeholder="Add a memory entry..."
+            value={newContent}
+            onChange={(e) => setNewContent(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdd() } }}
+          />
+          <button
+            className="btn-primary self-end px-3 py-2 text-xs"
+            onClick={handleAdd}
+            disabled={!newContent.trim() || adding}
+          >
+            Add
+          </button>
+        </div>
 
-      {entries.length === 0 && (
-        <p className="text-sm text-muted text-center py-8">No memory entries yet.</p>
-      )}
+        {entries.length === 0 && (
+          <p className="text-sm text-muted text-center py-8">No memory entries yet.</p>
+        )}
 
-      <div className="space-y-2">
-        {entries.map((entry: MemoryEntry) => (
-          <div key={entry.id} className="bg-surface-2 border border-border rounded-lg px-3 py-2.5 group">
-            {editingId === entry.id ? (
-              <div className="flex gap-2">
-                <textarea
-                  className="input flex-1 resize-none text-sm"
-                  rows={2}
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  autoFocus
-                />
-                <div className="flex flex-col gap-1 self-start">
-                  <button className="btn-primary text-xs px-2 py-1" onClick={() => handleUpdate(entry.id)}>Save</button>
-                  <button className="btn-ghost text-xs px-2 py-1" onClick={() => setEditingId(null)}>Cancel</button>
+        <div className="space-y-2">
+          {entries.map((entry: MemoryEntry) => (
+            <div key={entry.id} className="rounded-lg px-3 py-2.5 group" style={{ background: 'rgba(8,18,40,0.72)', border: '1px solid rgba(255,255,255,0.10)' }}>
+              {editingId === entry.id ? (
+                <div className="flex gap-2">
+                  <textarea
+                    className="input flex-1 resize-none text-sm"
+                    rows={2}
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="flex flex-col gap-1 self-start">
+                    <button className="btn-primary text-xs px-2 py-1" onClick={() => handleUpdate(entry.id)}>Save</button>
+                    <button className="btn-ghost text-xs px-2 py-1" onClick={() => setEditingId(null)}>Cancel</button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex items-start gap-2">
-                <p className="flex-1 text-sm" style={{ color: 'var(--text-primary)' }}>{entry.content}</p>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  <button
-                    className="p-1 rounded hover:bg-surface-3 text-muted hover:text-subtle transition-colors"
-                    onClick={() => { setEditingId(entry.id); setEditContent(entry.content) }}
-                    title="Edit"
-                  >
-                    <PencilIcon />
-                  </button>
-                  <button
-                    className="p-1 rounded hover:bg-surface-3 text-muted hover:text-red-400 transition-colors"
-                    onClick={() => deleteMemory(agentId, entry.id)}
-                    title="Delete"
-                  >
-                    <TrashIcon />
-                  </button>
+              ) : (
+                <div className="flex items-start gap-2">
+                  <p className="flex-1 text-sm" style={{ color: 'var(--text-primary)' }}>{entry.content}</p>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <button
+                      className="p-1 rounded hover:bg-white/[0.07] text-muted hover:text-subtle transition-colors"
+                      onClick={() => { setEditingId(entry.id); setEditContent(entry.content) }}
+                      title="Edit"
+                    >
+                      <PencilIcon />
+                    </button>
+                    <button
+                      className="p-1 rounded hover:bg-white/[0.07] text-muted hover:text-red-400 transition-colors"
+                      onClick={() => deleteMemory(agentId, entry.id)}
+                      title="Delete"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -379,55 +395,57 @@ function TodosTab({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 max-w-xl">
-      {/* Add new */}
-      <div className="flex gap-2 mb-6">
-        <input
-          className="input flex-1 text-sm"
-          placeholder="Add a todo..."
-          value={newText}
-          onChange={(e) => setNewText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
-        />
-        <button
-          className="btn-primary px-3 py-2 text-xs"
-          onClick={handleAdd}
-          disabled={!newText.trim() || adding}
-        >
-          Add
-        </button>
-      </div>
-
-      {/* Open todos */}
-      {open.length === 0 && done.length === 0 && (
-        <p className="text-sm text-muted text-center py-8">No todos yet.</p>
-      )}
-
-      <div className="space-y-1.5">
-        {open.map((t: TodoItem) => (
-          <TodoRow key={t.id} todo={t} agentId={agentId} onPatch={patchTodo} onDelete={deleteTodo} />
-        ))}
-      </div>
-
-      {/* Completed section */}
-      {done.length > 0 && (
-        <div className="mt-6">
+    <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
+      <div className="w-full max-w-xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+        {/* Add new */}
+        <div className="flex gap-2 mb-6">
+          <input
+            className="input flex-1 text-sm"
+            placeholder="Add a todo..."
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
+          />
           <button
-            className="flex items-center gap-1.5 text-xs text-muted hover:text-subtle mb-2 transition-colors"
-            onClick={() => setShowCompleted((v) => !v)}
+            className="btn-primary px-3 py-2 text-xs"
+            onClick={handleAdd}
+            disabled={!newText.trim() || adding}
           >
-            <ChevronIcon rotated={showCompleted} />
-            {done.length} completed
+            Add
           </button>
-          {showCompleted && (
-            <div className="space-y-1.5 opacity-60">
-              {done.map((t: TodoItem) => (
-                <TodoRow key={t.id} todo={t} agentId={agentId} onPatch={patchTodo} onDelete={deleteTodo} />
-              ))}
-            </div>
-          )}
         </div>
-      )}
+
+        {/* Open todos */}
+        {open.length === 0 && done.length === 0 && (
+          <p className="text-sm text-muted text-center py-8">No todos yet.</p>
+        )}
+
+        <div className="space-y-1.5">
+          {open.map((t: TodoItem) => (
+            <TodoRow key={t.id} todo={t} agentId={agentId} onPatch={patchTodo} onDelete={deleteTodo} />
+          ))}
+        </div>
+
+        {/* Completed section */}
+        {done.length > 0 && (
+          <div className="mt-6">
+            <button
+              className="flex items-center gap-1.5 text-xs text-muted hover:text-subtle mb-2 transition-colors"
+              onClick={() => setShowCompleted((v) => !v)}
+            >
+              <ChevronIcon rotated={showCompleted} />
+              {done.length} completed
+            </button>
+            {showCompleted && (
+              <div className="space-y-1.5 opacity-60">
+                {done.map((t: TodoItem) => (
+                  <TodoRow key={t.id} todo={t} agentId={agentId} onPatch={patchTodo} onDelete={deleteTodo} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -444,7 +462,7 @@ function TodoRow({
   onDelete: (agentId: string, id: number) => Promise<void>
 }) {
   return (
-    <div className="flex items-center gap-2.5 px-3 py-2 bg-surface-2 border border-border rounded-lg group">
+    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg group" style={{ background: 'rgba(8,18,40,0.72)', border: '1px solid rgba(255,255,255,0.10)' }}>
       <button
         className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
           todo.completed
@@ -466,7 +484,7 @@ function TodoRow({
         {todo.text}
       </span>
       <button
-        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-surface-3 text-muted hover:text-red-400 transition-all flex-shrink-0"
+        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/[0.07] text-muted hover:text-red-400 transition-all flex-shrink-0"
         onClick={() => onDelete(agentId, todo.id)}
         title="Delete"
       >
@@ -522,106 +540,108 @@ function ScheduleTab({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 max-w-2xl">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-xs text-muted">Recurring tasks that run automatically on a schedule.</p>
-        <button className="btn-primary text-xs px-3 py-1.5" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : '+ Add schedule'}
-        </button>
-      </div>
-
-      {/* Add form */}
-      {showForm && (
-        <div className="bg-surface-2 border border-border rounded-xl p-4 mb-6 space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-subtle mb-1">Label (optional)</label>
-            <input
-              className="input text-sm"
-              placeholder="e.g. Morning standup"
-              value={formLabel}
-              onChange={(e) => setFormLabel(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-subtle mb-1">Cron expression</label>
-            <input
-              className="input font-mono text-sm"
-              placeholder="0 9 * * *"
-              value={formCron}
-              onChange={(e) => setFormCron(e.target.value)}
-            />
-            <div className="flex gap-1.5 flex-wrap mt-1.5">
-              {CRON_PRESETS.map((p) => (
-                <button
-                  key={p.value}
-                  className="px-2 py-0.5 rounded bg-surface-3 text-[10px] text-subtle hover:text-text-primary transition-colors"
-                  onClick={() => setFormCron(p.value)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-subtle mb-1">Prompt</label>
-            <textarea
-              className="input resize-none text-sm"
-              rows={3}
-              placeholder="What should the agent do when this fires?"
-              value={formPrompt}
-              onChange={(e) => setFormPrompt(e.target.value)}
-            />
-          </div>
-          {formError && <p className="text-xs text-red-400">{formError}</p>}
-          <button className="btn-primary text-xs" onClick={handleCreate} disabled={saving}>
-            {saving ? 'Creating...' : 'Create schedule'}
+    <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
+      <div className="w-full max-w-2xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs text-muted">Recurring tasks that run automatically on a schedule.</p>
+          <button className="btn-primary text-xs px-3 py-1.5" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? 'Cancel' : '+ Add schedule'}
           </button>
         </div>
-      )}
 
-      {/* Schedule list */}
-      {items.length === 0 && !showForm && (
-        <p className="text-sm text-muted text-center py-8">No schedules yet.</p>
-      )}
-
-      <div className="space-y-2">
-        {items.map((s: Schedule) => (
-          <div key={s.id} className="bg-surface-2 border border-border rounded-lg px-4 py-3">
-            <div className="flex items-start gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  {s.label && (
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</span>
-                  )}
-                  <code className="text-[10px] bg-surface-3 px-1.5 py-0.5 rounded font-mono text-subtle">
-                    {s.cron}
-                  </code>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.enabled ? 'bg-green-500/15 text-green-400' : 'bg-surface-3 text-muted'}`}>
-                    {s.enabled ? 'enabled' : 'paused'}
-                  </span>
-                </div>
-                <p className="text-xs text-muted truncate">{s.prompt}</p>
-                <p className="text-[10px] text-muted mt-1">Next: {formatNextRun(s.next_run_at)}</p>
-              </div>
-              <div className="flex gap-1 flex-shrink-0">
-                <button
-                  className="p-1.5 rounded hover:bg-surface-3 text-muted hover:text-subtle transition-colors text-xs"
-                  onClick={() => patchSchedule(agentId, s.id, { enabled: s.enabled ? 0 : 1 })}
-                  title={s.enabled ? 'Pause' : 'Enable'}
-                >
-                  {s.enabled ? <PauseIcon /> : <PlayIcon />}
-                </button>
-                <button
-                  className="p-1.5 rounded hover:bg-surface-3 text-muted hover:text-red-400 transition-colors"
-                  onClick={() => deleteSchedule(agentId, s.id)}
-                  title="Delete"
-                >
-                  <TrashIcon />
-                </button>
+        {/* Add form */}
+        {showForm && (
+          <div className="rounded-xl p-4 mb-6 space-y-3 animate-zoom-in" style={{ background: 'rgba(8,18,40,0.80)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
+            <div>
+              <label className="block text-xs font-medium text-subtle mb-1">Label (optional)</label>
+              <input
+                className="input text-sm"
+                placeholder="e.g. Morning standup"
+                value={formLabel}
+                onChange={(e) => setFormLabel(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-subtle mb-1">Cron expression</label>
+              <input
+                className="input font-mono text-sm"
+                placeholder="0 9 * * *"
+                value={formCron}
+                onChange={(e) => setFormCron(e.target.value)}
+              />
+              <div className="flex gap-1.5 flex-wrap mt-1.5">
+                {CRON_PRESETS.map((p) => (
+                  <button
+                    key={p.value}
+                    className="px-2 py-0.5 rounded bg-white/[0.07] text-[10px] text-subtle hover:text-text-primary transition-colors"
+                    onClick={() => setFormCron(p.value)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
               </div>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-subtle mb-1">Prompt</label>
+              <textarea
+                className="input resize-none text-sm"
+                rows={3}
+                placeholder="What should the agent do when this fires?"
+                value={formPrompt}
+                onChange={(e) => setFormPrompt(e.target.value)}
+              />
+            </div>
+            {formError && <p className="text-xs text-red-400">{formError}</p>}
+            <button className="btn-primary text-xs" onClick={handleCreate} disabled={saving}>
+              {saving ? 'Creating...' : 'Create schedule'}
+            </button>
           </div>
-        ))}
+        )}
+
+        {/* Schedule list */}
+        {items.length === 0 && !showForm && (
+          <p className="text-sm text-muted text-center py-8">No schedules yet.</p>
+        )}
+
+        <div className="space-y-2">
+          {items.map((s: Schedule) => (
+            <div key={s.id} className="rounded-lg px-4 py-3" style={{ background: 'rgba(8,18,40,0.72)', border: '1px solid rgba(255,255,255,0.10)' }}>
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {s.label && (
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</span>
+                    )}
+                    <code className="text-[10px] bg-white/[0.07] px-1.5 py-0.5 rounded font-mono text-subtle">
+                      {s.cron}
+                    </code>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.enabled ? 'bg-green-500/15 text-green-400' : 'bg-white/[0.07] text-muted'}`}>
+                      {s.enabled ? 'enabled' : 'paused'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted truncate">{s.prompt}</p>
+                  <p className="text-[10px] text-muted mt-1">Next: {formatNextRun(s.next_run_at)}</p>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    className="p-1.5 rounded hover:bg-white/[0.07] text-muted hover:text-subtle transition-colors text-xs"
+                    onClick={() => patchSchedule(agentId, s.id, { enabled: s.enabled ? 0 : 1 })}
+                    title={s.enabled ? 'Pause' : 'Enable'}
+                  >
+                    {s.enabled ? <PauseIcon /> : <PlayIcon />}
+                  </button>
+                  <button
+                    className="p-1.5 rounded hover:bg-white/[0.07] text-muted hover:text-red-400 transition-colors"
+                    onClick={() => deleteSchedule(agentId, s.id)}
+                    title="Delete"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -649,40 +669,42 @@ function ProfileTab({ agent, onSave }: { agent: Agent; onSave: (data: Partial<Ag
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 max-w-xl">
-      <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-subtle mb-1.5">Name</label>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+    <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
+      <div className="w-full max-w-xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-subtle mb-1.5">Name</label>
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-subtle mb-1.5">Role</label>
+              <input className="input" value={role} onChange={(e) => setRole(e.target.value)} />
+            </div>
           </div>
+
           <div>
-            <label className="block text-xs font-medium text-subtle mb-1.5">Role</label>
-            <input className="input" value={role} onChange={(e) => setRole(e.target.value)} />
+            <label className="block text-xs font-medium text-subtle mb-1.5">Description</label>
+            <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short bio for the roster card..." />
           </div>
-        </div>
 
-        <div>
-          <label className="block text-xs font-medium text-subtle mb-1.5">Description</label>
-          <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short bio for the roster card..." />
-        </div>
+          <div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">System prompt</label>
+            <textarea
+              className="input resize-none h-48 font-mono text-xs"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="How should this agent behave?"
+            />
+            <p className="text-[10px] text-muted mt-1">Changes take effect on the next message. Current session will reset.</p>
+          </div>
 
-        <div>
-          <label className="block text-xs font-medium text-subtle mb-1.5">System prompt</label>
-          <textarea
-            className="input resize-none h-48 font-mono text-xs"
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="How should this agent behave?"
-          />
-          <p className="text-[10px] text-muted mt-1">Changes take effect on the next message. Current session will reset.</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save changes'}
-          </button>
-          {saved && <span className="text-xs text-green-400">Saved</span>}
+          <div className="flex items-center gap-3">
+            <button className="btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+            {saved && <span className="text-xs text-green-400">Saved</span>}
+          </div>
         </div>
       </div>
     </div>
@@ -730,90 +752,92 @@ function ModelTab({ agent, onSave }: { agent: Agent; onSave: (data: { modelConfi
     : 'Not configured'
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 max-w-xl">
-      <div className="space-y-5">
-        <div>
-          <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>AI Model</p>
-          <p className="text-xs text-muted">
-            Override the default model for this agent. Default: <span className="text-subtle">{defaultLabel}</span>
-          </p>
-        </div>
-
-        <label className="flex items-center gap-3 cursor-pointer select-none">
-          <div
-            className={`w-10 h-5 rounded-full transition-colors relative ${useCustom ? 'bg-accent' : 'bg-surface-3'}`}
-            onClick={() => setUseCustom((v) => !v)}
-          >
-            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${useCustom ? 'translate-x-5' : 'translate-x-0.5'}`} />
+    <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
+      <div className="w-full max-w-xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>AI Model</p>
+            <p className="text-xs text-muted">
+              Override the default model for this agent. Default: <span className="text-subtle">{defaultLabel}</span>
+            </p>
           </div>
-          <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Use custom model</span>
-        </label>
 
-        {useCustom && (
-          <div className="space-y-4 pl-4 border-l-2 border-accent/30">
-            <div>
-              <label className="block text-xs font-medium text-subtle mb-1.5">Provider</label>
-              <select
-                className="input"
-                value={provider}
-                onChange={(e) => handleProviderChange(e.target.value)}
-              >
-                {providers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}{p.configured ? '' : ' (not configured)'}
-                  </option>
-                ))}
-                {providers.length === 0 && <option value={provider}>{provider}</option>}
-              </select>
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <div
+              className={`w-10 h-5 rounded-full transition-colors relative ${useCustom ? 'bg-accent' : 'bg-white/[0.07]'}`}
+              onClick={() => setUseCustom((v) => !v)}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${useCustom ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </div>
+            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>Use custom model</span>
+          </label>
 
-            <div>
-              <label className="block text-xs font-medium text-subtle mb-1.5">Model</label>
-              <div className="relative">
-                <input
+          {useCustom && (
+            <div className="space-y-4 pl-4 border-l-2 border-accent/30">
+              <div>
+                <label className="block text-xs font-medium text-subtle mb-1.5">Provider</label>
+                <select
                   className="input"
-                  value={modelId}
-                  onChange={(e) => { setModelId(e.target.value); setOpen(true) }}
-                  onFocus={() => setOpen(true)}
-                  onBlur={() => setTimeout(() => setOpen(false), 150)}
-                  placeholder="Enter or select a model ID..."
-                />
-                {open && (PROVIDER_MODELS[provider] ?? []).length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-surface-2 border border-border rounded-lg overflow-hidden z-10 shadow-lg">
-                    {(PROVIDER_MODELS[provider] ?? [])
-                      .filter((s) => s.toLowerCase().includes(modelId.toLowerCase()))
-                      .map((s) => (
-                        <button
-                          key={s}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-surface-3 transition-colors"
-                          style={{ color: 'var(--text-primary)' }}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => { setModelId(s); setOpen(false) }}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                  </div>
-                )}
+                  value={provider}
+                  onChange={(e) => handleProviderChange(e.target.value)}
+                >
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}{p.configured ? '' : ' (not configured)'}
+                    </option>
+                  ))}
+                  {providers.length === 0 && <option value={provider}>{provider}</option>}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-subtle mb-1.5">Model</label>
+                <div className="relative">
+                  <input
+                    className="input"
+                    value={modelId}
+                    onChange={(e) => { setModelId(e.target.value); setOpen(true) }}
+                    onFocus={() => setOpen(true)}
+                    onBlur={() => setTimeout(() => setOpen(false), 150)}
+                    placeholder="Enter or select a model ID..."
+                  />
+                  {open && (PROVIDER_MODELS[provider] ?? []).length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 rounded-lg overflow-hidden z-10" style={{ background: 'rgba(8,18,40,0.92)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+                      {(PROVIDER_MODELS[provider] ?? [])
+                        .filter((s) => s.toLowerCase().includes(modelId.toLowerCase()))
+                        .map((s) => (
+                          <button
+                            key={s}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-white/[0.07] transition-colors"
+                            style={{ color: 'var(--text-primary)' }}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { setModelId(s); setOpen(false) }}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-subtle mb-1.5">Thinking level</label>
+                <select className="input" value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)}>
+                  {THINKING_LEVELS.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
+          )}
 
-            <div>
-              <label className="block text-xs font-medium text-subtle mb-1.5">Thinking level</label>
-              <select className="input" value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)}>
-                {THINKING_LEVELS.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </div>
+          <div className="flex items-center gap-3">
+            <button className="btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            {saved && <span className="text-xs text-green-400">Saved</span>}
           </div>
-        )}
-
-        <div className="flex items-center gap-3">
-          <button className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-          {saved && <span className="text-xs text-green-400">Saved</span>}
         </div>
       </div>
     </div>
@@ -845,7 +869,10 @@ function MessageBubble({ msg, agentName, agentColor }: {
       >
         {agentName[0].toUpperCase()}
       </div>
-      <div className="max-w-[70%] bg-surface-2 border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+      <div
+        className="max-w-[70%] rounded-2xl rounded-tl-sm px-4 py-3"
+        style={{ background: 'rgba(8,18,40,0.72)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+      >
         <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{msg.content}</p>
       </div>
     </div>

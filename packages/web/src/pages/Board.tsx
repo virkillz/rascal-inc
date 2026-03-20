@@ -81,9 +81,17 @@ export default function Board() {
   const lanes: Lane[] = [...board.lanes].sort((a, b) => a.position - b.position)
 
   return (
-    <div className="h-full flex flex-col bg-surface-0">
+    <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+      <div
+        className="px-6 py-4 flex items-center gap-3"
+        style={{
+          background: 'rgba(8, 18, 40, 0.60)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
         <h1 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{board.name}</h1>
         {error && <span className="text-xs text-red-400 ml-auto">{error}</span>}
       </div>
@@ -96,14 +104,25 @@ export default function Board() {
             return (
               <div
                 key={lane.id}
-                className="w-72 flex flex-col bg-surface-1 rounded-xl border border-border"
+                className="w-72 flex flex-col rounded-xl animate-zoom-in"
+                style={{
+                  background: 'rgba(8, 18, 40, 0.72)',
+                  backdropFilter: 'blur(14px)',
+                  WebkitBackdropFilter: 'blur(14px)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => handleDrop(lane.id)}
               >
                 {/* Lane header */}
-                <div className="px-3 py-3 flex items-center gap-2 border-b border-border">
+                <div className="px-3 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                   <span className="text-xs font-semibold uppercase tracking-wide text-muted">{lane.name}</span>
-                  <span className="ml-auto text-xs text-muted bg-surface-2 rounded-full px-2 py-0.5">{cards.length}</span>
+                  <span
+                    className="ml-auto text-xs rounded-full px-2 py-0.5"
+                    style={{ background: 'rgba(255,255,255,0.07)', color: 'var(--muted)' }}
+                  >
+                    {cards.length}
+                  </span>
                 </div>
 
                 {/* Cards */}
@@ -113,7 +132,13 @@ export default function Board() {
                       key={card.id}
                       draggable
                       onDragStart={() => handleDragStart(card)}
-                      className="group bg-surface-0 border border-border rounded-lg px-3 py-2.5 cursor-grab active:cursor-grabbing hover:border-accent/40 transition-colors"
+                      className="group rounded-lg px-3 py-2.5 cursor-grab active:cursor-grabbing transition-all"
+                      style={{
+                        background: 'rgba(8, 18, 40, 0.60)',
+                        border: '1px solid rgba(255,255,255,0.09)',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(245,158,11,0.35)' }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.09)' }}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{card.title}</p>
@@ -132,7 +157,7 @@ export default function Board() {
                 </div>
 
                 {/* Add card */}
-                <div className="p-2 border-t border-border">
+                <div className="p-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                   {newCardLane === lane.id ? (
                     <div className="space-y-1.5">
                       <input
@@ -144,8 +169,7 @@ export default function Board() {
                           if (e.key === 'Escape') { setNewCardLane(null); setNewCardTitle('') }
                         }}
                         placeholder="Card title…"
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-surface-0 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
-                        style={{ color: 'var(--text-primary)' }}
+                        className="input text-sm"
                       />
                       <div className="flex gap-1.5">
                         <button
@@ -156,7 +180,7 @@ export default function Board() {
                         </button>
                         <button
                           onClick={() => { setNewCardLane(null); setNewCardTitle('') }}
-                          className="px-2 py-1 text-xs text-muted hover:bg-surface-2 rounded-md transition-colors"
+                          className="px-2 py-1 text-xs text-muted hover:bg-white/5 rounded-md transition-colors"
                         >
                           Cancel
                         </button>
