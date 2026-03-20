@@ -137,10 +137,13 @@ export default function AgentChat() {
           }}
         >
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
             style={{ backgroundColor: agent.avatar_color + '33', border: `1px solid ${agent.avatar_color}66`, color: agent.avatar_color }}
           >
-            {agent.name[0].toUpperCase()}
+            {agent.avatar_url
+              ? <img src={agent.avatar_url} alt={agent.name} className="w-full h-full object-cover" />
+              : agent.name[0].toUpperCase()
+            }
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{agent.name}</div>
@@ -172,12 +175,15 @@ export default function AgentChat() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               {messages.length === 0 && !sending && (
-                <div className="flex flex-col items-center justify-center h-full text-center py-16">
+                <div className="flex flex-col items-center justify-center h-full text-center py-16 bg-gray-900/80 backdrop-blur-md rounded-md">
                   <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold mb-4"
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold mb-4 overflow-hidden"
                     style={{ backgroundColor: agent.avatar_color + '22', border: `1px solid ${agent.avatar_color}44`, color: agent.avatar_color }}
                   >
-                    {agent.name[0].toUpperCase()}
+                    {agent.avatar_url
+                      ? <img src={agent.avatar_url} alt={agent.name} className="w-full h-full object-cover" />
+                      : agent.name[0].toUpperCase()
+                    }
                   </div>
                   <div className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Chat with {agent.name}</div>
                   <div className="text-xs text-muted max-w-xs">
@@ -187,16 +193,19 @@ export default function AgentChat() {
               )}
 
               {messages.map((msg) => (
-                <MessageBubble key={msg.id} msg={msg} agentName={agent.name} agentColor={agent.avatar_color} />
+                <MessageBubble key={msg.id} msg={msg} agentName={agent.name} agentColor={agent.avatar_color} agentAvatarUrl={agent.avatar_url} />
               ))}
 
               {sending && (
                 <div className="flex items-start gap-3">
                   <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 overflow-hidden"
                     style={{ backgroundColor: agent.avatar_color + '33', color: agent.avatar_color }}
                   >
-                    {agent.name[0].toUpperCase()}
+                    {agent.avatar_url
+                      ? <img src={agent.avatar_url} alt={agent.name} className="w-full h-full object-cover" />
+                      : agent.name[0].toUpperCase()
+                    }
                   </div>
                   <div
                     className="rounded-2xl rounded-tl-sm px-4 py-3"
@@ -935,10 +944,11 @@ function SkillsTab({ agent, onSave }: { agent: Agent; onSave: (data: { modelConf
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, agentName, agentColor }: {
+function MessageBubble({ msg, agentName, agentColor, agentAvatarUrl }: {
   msg: ChatMessage
   agentName: string
   agentColor: string
+  agentAvatarUrl?: string
 }) {
   if (msg.role === 'user') {
     return (
@@ -953,10 +963,13 @@ function MessageBubble({ msg, agentName, agentColor }: {
   return (
     <div className="flex items-start gap-3">
       <div
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 overflow-hidden"
         style={{ backgroundColor: agentColor + '33', color: agentColor }}
       >
-        {agentName[0].toUpperCase()}
+        {agentAvatarUrl
+          ? <img src={agentAvatarUrl} alt={agentName} className="w-full h-full object-cover" />
+          : agentName[0].toUpperCase()
+        }
       </div>
       <div
         className="max-w-[70%] rounded-2xl rounded-tl-sm px-4 py-3"

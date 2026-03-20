@@ -68,7 +68,11 @@ function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
     : ''
 
   // ── Layer 3: Identity prompt ─────────────────────────────────────────────
-  const identityBlock = agent.system_prompt.trim()
+  const projectDir = path.dirname(workspaceDir)
+  const identityBlock = agent.system_prompt
+    .trim()
+    .replace(/{working_directory}/g, workspaceDir)
+    .replace(/{project_dir}/g, projectDir)
 
   // ── Dynamic context: memory + todos ─────────────────────────────────────
   const memories = getAgentMemory(agent.id)

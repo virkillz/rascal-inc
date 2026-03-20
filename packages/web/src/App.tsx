@@ -8,12 +8,14 @@ import Login from './pages/Login.tsx'
 import Roster from './pages/Roster.tsx'
 import AgentChat from './pages/AgentChat.tsx'
 import Settings from './pages/Settings.tsx'
+import SettingsProvider from './pages/settings/Provider.tsx'
+import SettingsModel from './pages/settings/Model.tsx'
+import SettingsExtensions from './pages/settings/Extensions.tsx'
+import SettingsSkills from './pages/settings/Skills.tsx'
+import SettingsRoles from './pages/settings/Roles.tsx'
 import Workspace from './pages/Workspace.tsx'
-import Plugins from './pages/Plugins.tsx'
-import Skills from './pages/Skills.tsx'
 import Board from './pages/Board.tsx'
 import Channels from './pages/Channels.tsx'
-import Roles from './pages/Roles.tsx'
 import Layout from './components/Layout.tsx'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
@@ -92,11 +94,15 @@ export default function App() {
             <Route path="/board" element={<Board />} />
             <Route path="/roster" element={<Roster />} />
             <Route path="/agents/:id" element={<AgentChat />} />
-            <Route path="/roles" element={<Roles />} />
             <Route path="/workspace" element={<Workspace />} />
-            <Route path="/plugins" element={<Plugins />} />
-            <Route path="/skills" element={<Skills />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<Settings />}>
+              <Route index element={<Navigate to="/settings/provider" replace />} />
+              <Route path="provider" element={<SettingsProvider />} />
+              <Route path="model" element={<SettingsModel />} />
+              <Route path="extensions" element={<SettingsExtensions />} />
+              <Route path="skills" element={<SettingsSkills />} />
+              <Route path="roles" element={<SettingsRoles />} />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>

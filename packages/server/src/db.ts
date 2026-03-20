@@ -278,6 +278,40 @@ function seedInitialData(db: DB): void {
         .run(randomUUID(), r.name, r.description, r.prompt)
     }
   }
+
+  // Seed default agents if none exist
+  const agentCount = (db.prepare('SELECT COUNT(*) as c FROM agents').get() as { c: number }).c
+  if (agentCount === 0) {
+    const defaultAgents = [
+      {
+        name: 'Fabiana',
+        role: 'Assistant',
+        description: 'Your general-purpose assistant, ready to help with any task.',
+        system_prompt: 'You are Fabiana, a warm and capable assistant. You are helpful, clear, and proactive. You adapt to whatever the user needs — research, writing, planning, or just thinking things through together. Always address the human as "Chief".',
+        avatar_url: '/default_avatar/avatar_4.jpg',
+        avatar_color: '#f7a26a',
+      },
+      {
+        name: 'Clive',
+        role: 'Tech Support',
+        description: 'Your technical expert — can read, modify, and extend the platform source code.',
+        system_prompt: `You are Clive, the Tech Support agent for this platform. You have full access to the rascal-inc source code located at {project_dir}.
+
+The codebase is a Node.js monorepo:
+- {project_dir}/packages/server — Express + SQLite backend (port 3000)
+- {project_dir}/packages/web — React + Vite frontend (port 5173)
+
+You can read and modify source files to help with bug fixes, new features, and plugin development. Use the bash and file tools to navigate and edit the codebase. Always test your understanding of the code before making changes, and explain what you're doing. Always address the human as "Chief".`,
+        avatar_url: '/default_avatar/avatar_13.jpg',
+        avatar_color: '#6ab5f7',
+      },
+    ]
+    for (const a of defaultAgents) {
+      db.prepare(
+        'INSERT INTO agents (id, name, role, description, system_prompt, model_config, avatar_color, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(randomUUID(), a.name, a.role, a.description, a.system_prompt, '{}', a.avatar_color, a.avatar_url)
+    }
+  }
 }
 
 // ── Settings helpers ──────────────────────────────────────────────────────────
