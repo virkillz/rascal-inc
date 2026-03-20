@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
-import { getDb, type BoardRow, type LaneRow, type CardRow, type LaneRuleRow } from '../db.js'
+import { getDb, type BoardRow, type LaneRow, type CardRow, type LaneRuleRow, type CardEventRow } from '../db.js'
 import { requireAuth, requireAdmin, type AuthRequest } from '../auth.js'
 import { eventBus } from '../event-bus.js'
 
@@ -18,6 +18,24 @@ function getBoardFull(boardId: string) {
     WHERE l.board_id = ?
   `).all(boardId) as unknown as LaneRuleRow[]
   return { ...board, lanes, cards, rules }
+}
+
+function getLaneName(laneId: string): string {
+  const row = getDb().prepare('SELECT name FROM lanes WHERE id = ?').get(laneId) as { name: string } | undefined
+  return row?.name ?? laneId
+}
+
+function insertEvent(
+  cardId: string,
+  boardId: string,
+  actorId: string,
+  actorType: string,
+  action: string,
+  meta: Record<string, unknown> = {},
+): void {
+  getDb().prepare(
+    `INSERT INTO card_events (card_id, board_id, actor_id, actor_type, action, meta) VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(cardId, boardId, actorId, actorType, action, JSON.stringify(meta))
 }
 
 /**
@@ -161,46 +179,69 @@ export function createBoardsRouter(): Router {
 
   // POST /api/boards/:id/cards
   router.post('/:id/cards', requireAuth, (req: AuthRequest, res) => {
-    const { laneId, title, description, assigneeId, assigneeType } = req.body as {
+    const { laneId, title, description, result, assigneeId, assigneeType } = req.body as {
       laneId?: string
       title?: string
       description?: string
+      result?: string
       assigneeId?: string
       assigneeType?: 'agent' | 'user'
     }
     if (!laneId?.trim()) return res.status(400).json({ error: 'laneId required' })
     if (!title?.trim()) return res.status(400).json({ error: 'title required' })
 
-    const lane = getDb().prepare('SELECT id FROM lanes WHERE id = ? AND board_id = ?').get(laneId, req.params.id)
+    const lane = getDb().prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(laneId, req.params.id) as { id: string; name: string } | undefined
     if (!lane) return res.status(404).json({ error: 'Lane not found' })
 
     const pos = (getDb().prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(laneId) as { c: number }).c
     const id = randomUUID()
+    const actorId = req.user!.id
+    const actorType = 'user'
+
     getDb().prepare(`
-      INSERT INTO cards (id, board_id, lane_id, title, description, assignee_id, assignee_type, created_by, created_by_type, position)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.id, laneId, title.trim(), description?.trim() ?? '', assigneeId ?? null, assigneeType ?? null, req.user!.id, 'user', pos)
+      INSERT INTO cards (id, board_id, lane_id, title, description, result, assignee_id, assignee_type, created_by, created_by_type, position)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, req.params.id, laneId, title.trim(), description?.trim() ?? '', result?.trim() ?? '', assigneeId ?? null, assigneeType ?? null, actorId, actorType, pos)
 
     const card = getDb().prepare('SELECT * FROM cards WHERE id = ?').get(id) as unknown as CardRow
+    insertEvent(id, req.params.id, actorId, actorType, 'created', { lane: lane.name, title: card.title })
     eventBus.emit({ type: 'board:card_moved', cardId: id, boardId: req.params.id, laneId, title: card.title })
     res.status(201).json(card)
   })
 
-  // PUT /api/boards/:boardId/cards/:cardId — update title/description/assignee
+  // PUT /api/boards/:boardId/cards/:cardId — update title/description/result/assignee
   router.put('/:boardId/cards/:cardId', requireAuth, (req: AuthRequest, res) => {
     const card = getDb().prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(req.params.cardId, req.params.boardId) as unknown as CardRow | undefined
     if (!card) return res.status(404).json({ error: 'Card not found' })
 
-    const { title, description, assigneeId, assigneeType } = req.body as {
+    const { title, description, result, assigneeId, assigneeType } = req.body as {
       title?: string
       description?: string
+      result?: string
       assigneeId?: string | null
       assigneeType?: 'agent' | 'user' | null
     }
 
+    const changed: string[] = []
+    if (title !== undefined && title.trim() !== card.title) changed.push('title')
+    if (description !== undefined && description.trim() !== card.description) changed.push('description')
+    if (result !== undefined && result.trim() !== card.result) changed.push('result')
+    if (assigneeId !== undefined && assigneeId !== card.assignee_id) changed.push('assignee')
+
     getDb().prepare(`
-      UPDATE cards SET title = ?, description = ?, assignee_id = ?, assignee_type = ?, updated_at = datetime('now') WHERE id = ?
-    `).run(title?.trim() ?? card.title, description?.trim() ?? card.description, assigneeId ?? card.assignee_id, assigneeType ?? card.assignee_type, card.id)
+      UPDATE cards SET title = ?, description = ?, result = ?, assignee_id = ?, assignee_type = ?, updated_at = datetime('now') WHERE id = ?
+    `).run(
+      title?.trim() ?? card.title,
+      description?.trim() ?? card.description,
+      result?.trim() ?? card.result,
+      assigneeId !== undefined ? assigneeId : card.assignee_id,
+      assigneeType !== undefined ? assigneeType : card.assignee_type,
+      card.id,
+    )
+
+    if (changed.length > 0) {
+      insertEvent(card.id, req.params.boardId, req.user!.id, 'user', 'updated', { changed })
+    }
 
     res.json(getDb().prepare('SELECT * FROM cards WHERE id = ?').get(card.id))
   })
@@ -213,7 +254,7 @@ export function createBoardsRouter(): Router {
     const { laneId, position } = req.body as { laneId?: string; position?: number }
     if (!laneId?.trim()) return res.status(400).json({ error: 'laneId required' })
 
-    const lane = getDb().prepare('SELECT id FROM lanes WHERE id = ? AND board_id = ?').get(laneId, req.params.boardId)
+    const lane = getDb().prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(laneId, req.params.boardId) as { id: string; name: string } | undefined
     if (!lane) return res.status(404).json({ error: 'Lane not found on this board' })
 
     // Check lane movement rules
@@ -222,8 +263,11 @@ export function createBoardsRouter(): Router {
       return res.status(403).json({ error: 'You do not have permission to move cards into this lane' })
     }
 
+    const fromLaneName = getLaneName(card.lane_id)
     const pos = position ?? (getDb().prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(laneId) as { c: number }).c
     getDb().prepare(`UPDATE cards SET lane_id = ?, position = ?, updated_at = datetime('now') WHERE id = ?`).run(laneId, pos, card.id)
+
+    insertEvent(card.id, req.params.boardId, actorId, 'user', 'moved', { from_lane: fromLaneName, to_lane: lane.name })
 
     const updated = getDb().prepare('SELECT * FROM cards WHERE id = ?').get(card.id) as unknown as CardRow
     eventBus.emit({ type: 'board:card_moved', cardId: card.id, boardId: req.params.boardId, laneId, title: updated.title })
@@ -231,11 +275,22 @@ export function createBoardsRouter(): Router {
   })
 
   // DELETE /api/boards/:boardId/cards/:cardId
-  router.delete('/:boardId/cards/:cardId', requireAuth, (req, res) => {
-    const card = getDb().prepare('SELECT id FROM cards WHERE id = ? AND board_id = ?').get(req.params.cardId, req.params.boardId)
+  router.delete('/:boardId/cards/:cardId', requireAuth, (req: AuthRequest, res) => {
+    const card = getDb().prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(req.params.cardId, req.params.boardId) as unknown as CardRow | undefined
     if (!card) return res.status(404).json({ error: 'Card not found' })
+    insertEvent(card.id, req.params.boardId, req.user!.id, 'user', 'deleted', { title: card.title })
     getDb().prepare('DELETE FROM cards WHERE id = ?').run(req.params.cardId)
     res.json({ ok: true })
+  })
+
+  // ── Card events ───────────────────────────────────────────────────────────
+
+  // GET /api/boards/:boardId/cards/:cardId/events
+  router.get('/:boardId/cards/:cardId/events', requireAuth, (req, res) => {
+    const events = getDb()
+      .prepare('SELECT * FROM card_events WHERE card_id = ? ORDER BY created_at ASC')
+      .all(req.params.cardId) as unknown as CardEventRow[]
+    res.json(events)
   })
 
   return router

@@ -128,6 +128,143 @@ export function makeTodoCompleteTool(agentId: string): ToolDefinition {
   }
 }
 
+// ── Board tools ───────────────────────────────────────────────────────────────
+
+export function makeBoardListCardsTool(): ToolDefinition {
+  return {
+    name: 'board_list_cards',
+    label: 'List Board Cards',
+    description: 'List cards on a board. Optionally filter by lane or assignee.',
+    parameters: Type.Object({
+      boardId: Type.String({ description: 'Board ID' }),
+      laneId: Type.Optional(Type.String({ description: 'Filter by lane ID' })),
+      assigneeId: Type.Optional(Type.String({ description: 'Filter by assignee ID' })),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const db = getDb()
+      let query = 'SELECT * FROM cards WHERE board_id = ?'
+      const args: string[] = [params.boardId]
+      if (params.laneId) { query += ' AND lane_id = ?'; args.push(params.laneId) }
+      if (params.assigneeId) { query += ' AND assignee_id = ?'; args.push(params.assigneeId) }
+      query += ' ORDER BY position ASC'
+      const cards = db.prepare(query).all(...args)
+      return ok(JSON.stringify(cards, null, 2))
+    },
+  }
+}
+
+export function makeBoardCreateCardTool(agentId: string): ToolDefinition {
+  return {
+    name: 'board_create_card',
+    label: 'Create Board Card',
+    description: 'Create a new card on a board. You will be recorded as the creator.',
+    parameters: Type.Object({
+      boardId: Type.String({ description: 'Board ID' }),
+      laneId: Type.String({ description: 'Lane ID to place the card in' }),
+      title: Type.String({ description: 'Card title' }),
+      description: Type.Optional(Type.String({ description: 'Task description' })),
+      assigneeId: Type.Optional(Type.String({ description: 'ID of the assignee (agent or user)' })),
+      assigneeType: Type.Optional(Type.Union([Type.Literal('agent'), Type.Literal('user')], { description: 'Type of assignee' })),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const { randomUUID } = await import('crypto')
+      const db = getDb()
+      const lane = db.prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(params.laneId, params.boardId) as { id: string; name: string } | undefined
+      if (!lane) throw new Error(`Lane ${params.laneId} not found on board ${params.boardId}`)
+      const pos = (db.prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(params.laneId) as { c: number }).c
+      const cardId = randomUUID()
+      db.prepare(`
+        INSERT INTO cards (id, board_id, lane_id, title, description, result, assignee_id, assignee_type, created_by, created_by_type, position)
+        VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, 'agent', ?)
+      `).run(cardId, params.boardId, params.laneId, params.title, params.description ?? '', params.assigneeId ?? null, params.assigneeType ?? null, agentId, pos)
+      db.prepare(
+        `INSERT INTO card_events (card_id, board_id, actor_id, actor_type, action, meta) VALUES (?, ?, ?, 'agent', 'created', ?)`
+      ).run(cardId, params.boardId, agentId, JSON.stringify({ lane: lane.name, title: params.title }))
+      const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(cardId)
+      return ok(JSON.stringify(card, null, 2))
+    },
+  }
+}
+
+export function makeBoardUpdateCardTool(agentId: string): ToolDefinition {
+  return {
+    name: 'board_update_card',
+    label: 'Update Board Card',
+    description: "Update a card's title, description, result, or assignee.",
+    parameters: Type.Object({
+      boardId: Type.String({ description: 'Board ID' }),
+      cardId: Type.String({ description: 'Card ID' }),
+      title: Type.Optional(Type.String({ description: 'New title' })),
+      description: Type.Optional(Type.String({ description: 'New task description' })),
+      result: Type.Optional(Type.String({ description: 'Result or output of the task' })),
+      assigneeId: Type.Optional(Type.Union([Type.String(), Type.Null()], { description: 'Assignee ID or null to unassign' })),
+      assigneeType: Type.Optional(Type.Union([Type.Literal('agent'), Type.Literal('user'), Type.Null()], { description: 'Assignee type' })),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const db = getDb()
+      const card = db.prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(params.cardId, params.boardId) as Record<string, unknown> | undefined
+      if (!card) throw new Error(`Card ${params.cardId} not found`)
+      const changed: string[] = []
+      if (params.title !== undefined && params.title !== card.title) changed.push('title')
+      if (params.description !== undefined && params.description !== card.description) changed.push('description')
+      if (params.result !== undefined && params.result !== card.result) changed.push('result')
+      if (params.assigneeId !== undefined && params.assigneeId !== card.assignee_id) changed.push('assignee')
+      db.prepare(`
+        UPDATE cards SET
+          title = ?, description = ?, result = ?, assignee_id = ?, assignee_type = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).run(
+        params.title ?? card.title,
+        params.description ?? card.description,
+        params.result ?? card.result,
+        params.assigneeId !== undefined ? params.assigneeId : card.assignee_id,
+        params.assigneeType !== undefined ? params.assigneeType : card.assignee_type,
+        params.cardId,
+      )
+      if (changed.length > 0) {
+        db.prepare(
+          `INSERT INTO card_events (card_id, board_id, actor_id, actor_type, action, meta) VALUES (?, ?, ?, 'agent', 'updated', ?)`
+        ).run(params.cardId, params.boardId, agentId, JSON.stringify({ changed }))
+      }
+      const updated = db.prepare('SELECT * FROM cards WHERE id = ?').get(params.cardId)
+      return ok(JSON.stringify(updated, null, 2))
+    },
+  }
+}
+
+export function makeBoardMoveCardTool(agentId: string): ToolDefinition {
+  return {
+    name: 'board_move_card',
+    label: 'Move Board Card',
+    description: 'Move a card to a different lane.',
+    parameters: Type.Object({
+      boardId: Type.String({ description: 'Board ID' }),
+      cardId: Type.String({ description: 'Card ID' }),
+      laneId: Type.String({ description: 'Destination lane ID' }),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const db = getDb()
+      const card = db.prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(params.cardId, params.boardId) as Record<string, unknown> | undefined
+      if (!card) throw new Error(`Card ${params.cardId} not found`)
+      const toLane = db.prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(params.laneId, params.boardId) as { id: string; name: string } | undefined
+      if (!toLane) throw new Error(`Lane ${params.laneId} not found on board ${params.boardId}`)
+      const fromLane = db.prepare('SELECT name FROM lanes WHERE id = ?').get(card.lane_id as string) as { name: string } | undefined
+      const pos = (db.prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(params.laneId) as { c: number }).c
+      db.prepare(`UPDATE cards SET lane_id = ?, position = ?, updated_at = datetime('now') WHERE id = ?`).run(params.laneId, pos, params.cardId)
+      db.prepare(
+        `INSERT INTO card_events (card_id, board_id, actor_id, actor_type, action, meta) VALUES (?, ?, ?, 'agent', 'moved', ?)`
+      ).run(params.cardId, params.boardId, agentId, JSON.stringify({ from_lane: fromLane?.name ?? '', to_lane: toLane.name }))
+      const updated = db.prepare('SELECT * FROM cards WHERE id = ?').get(params.cardId)
+      return ok(JSON.stringify(updated, null, 2))
+    },
+  }
+}
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 export interface ToolContext {
@@ -135,7 +272,10 @@ export interface ToolContext {
   workspaceDir: string
 }
 
-const PLATFORM_TOOL_IDS = new Set(['workspace-read', 'workspace-write'])
+const PLATFORM_TOOL_IDS = new Set([
+  'workspace-read', 'workspace-write',
+  'board_list_cards', 'board_create_card', 'board_update_card', 'board_move_card',
+])
 
 /**
  * Build the list of custom ToolDefinitions for an agent session.
@@ -154,6 +294,18 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
         case 'workspace-write':
           tools.push(makeWorkspaceWriteTool(ctx.workspaceDir))
           break
+        case 'board_list_cards':
+          tools.push(makeBoardListCardsTool())
+          break
+        case 'board_create_card':
+          tools.push(makeBoardCreateCardTool(ctx.agentId))
+          break
+        case 'board_update_card':
+          tools.push(makeBoardUpdateCardTool(ctx.agentId))
+          break
+        case 'board_move_card':
+          tools.push(makeBoardMoveCardTool(ctx.agentId))
+          break
       }
     } else {
       pluginToolIds.push(id)
@@ -165,10 +317,14 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
     tools.push(...pluginTools)
   }
 
-  // Every agent always gets memory and todo tools
+  // Every agent always gets memory, todo, and board tools
   tools.push(makeMemoryAddTool(ctx.agentId))
   tools.push(makeTodoAddTool(ctx.agentId))
   tools.push(makeTodoCompleteTool(ctx.agentId))
+  tools.push(makeBoardListCardsTool())
+  tools.push(makeBoardCreateCardTool(ctx.agentId))
+  tools.push(makeBoardUpdateCardTool(ctx.agentId))
+  tools.push(makeBoardMoveCardTool(ctx.agentId))
 
   return tools
 }

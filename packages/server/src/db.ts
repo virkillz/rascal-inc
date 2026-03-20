@@ -163,6 +163,7 @@ function runMigrations(db: DB): void {
       lane_id         TEXT NOT NULL REFERENCES lanes(id),
       title           TEXT NOT NULL,
       description     TEXT NOT NULL DEFAULT '',
+      result          TEXT NOT NULL DEFAULT '',
       assignee_id     TEXT,
       assignee_type   TEXT,
       created_by      TEXT NOT NULL,
@@ -181,6 +182,20 @@ function runMigrations(db: DB): void {
       rule_type TEXT NOT NULL,
       target_id TEXT
     );
+
+    -- Card activity log: immutable record of every card action.
+    -- card_id is intentionally not a FK so events survive card deletion.
+    CREATE TABLE IF NOT EXISTS card_events (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      card_id    TEXT    NOT NULL,
+      board_id   TEXT    NOT NULL,
+      actor_id   TEXT    NOT NULL,
+      actor_type TEXT    NOT NULL,
+      action     TEXT    NOT NULL,
+      meta       TEXT    NOT NULL DEFAULT '{}',
+      created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_card_events_card ON card_events(card_id, created_at);
 
     -- ── Auth sessions ────────────────────────────────────────────────────────
 
@@ -221,6 +236,7 @@ function runMigrations(db: DB): void {
   addColumnIfNotExists(db, 'agents', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
   addColumnIfNotExists(db, 'agents', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'agent_schedules', 'skip_if_no_todos', 'INTEGER NOT NULL DEFAULT 0')
+  addColumnIfNotExists(db, 'cards', 'result', "TEXT NOT NULL DEFAULT ''")
 }
 
 function seedInitialData(db: DB): void {
@@ -410,6 +426,7 @@ export interface CardRow {
   lane_id: string
   title: string
   description: string
+  result: string
   assignee_id: string | null
   assignee_type: string | null
   created_by: string
@@ -417,6 +434,17 @@ export interface CardRow {
   position: number
   created_at: string
   updated_at: string
+}
+
+export interface CardEventRow {
+  id: number
+  card_id: string
+  board_id: string
+  actor_id: string
+  actor_type: string
+  action: string
+  meta: string
+  created_at: string
 }
 
 export interface LaneRuleRow {

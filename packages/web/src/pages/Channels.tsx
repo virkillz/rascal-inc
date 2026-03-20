@@ -439,7 +439,7 @@ export default function Channels() {
                           )}
                           <div
                             className="rounded-2xl rounded-tr-sm px-4 py-2.5"
-                            style={{ background: 'rgba(245,158,11,0.28)', border: '1px solid rgba(245,158,11,0.55)' }}
+                            style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.20)' }}
                           >
                             {isEditing ? (
                               <div className="flex flex-col gap-2">

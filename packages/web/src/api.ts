@@ -195,14 +195,18 @@ export const api = {
       req<LaneRule>('POST', `/boards/${boardId}/lanes/${laneId}/rules`, { ruleType, targetId }),
     deleteLaneRule: (boardId: string, laneId: string, ruleId: string) =>
       req<{ ok: boolean }>('DELETE', `/boards/${boardId}/lanes/${laneId}/rules/${ruleId}`),
-    addCard: (boardId: string, data: { laneId: string; title: string; description?: string; assigneeId?: string; assigneeType?: 'agent' | 'user' }) =>
+    update: (id: string, name: string) => req<Board>('PUT', `/boards/${id}`, { name }),
+    delete: (id: string) => req<{ ok: boolean }>('DELETE', `/boards/${id}`),
+    addCard: (boardId: string, data: { laneId: string; title: string; description?: string; result?: string; assigneeId?: string; assigneeType?: 'agent' | 'user' }) =>
       req<Card>('POST', `/boards/${boardId}/cards`, data),
-    updateCard: (boardId: string, cardId: string, data: { title?: string; description?: string; assigneeId?: string | null; assigneeType?: 'agent' | 'user' | null }) =>
+    updateCard: (boardId: string, cardId: string, data: { title?: string; description?: string; result?: string; assigneeId?: string | null; assigneeType?: 'agent' | 'user' | null }) =>
       req<Card>('PUT', `/boards/${boardId}/cards/${cardId}`, data),
     moveCard: (boardId: string, cardId: string, laneId: string, position?: number) =>
       req<Card>('POST', `/boards/${boardId}/cards/${cardId}/move`, { laneId, position }),
     deleteCard: (boardId: string, cardId: string) =>
       req<{ ok: boolean }>('DELETE', `/boards/${boardId}/cards/${cardId}`),
+    cardEvents: (boardId: string, cardId: string) =>
+      req<CardEvent[]>('GET', `/boards/${boardId}/cards/${cardId}/events`),
   },
 
   // ─── Channels ─────────────────────────────────────────────────────────────
@@ -359,6 +363,7 @@ export interface Card {
   lane_id: string
   title: string
   description: string
+  result: string
   assignee_id: string | null
   assignee_type: 'agent' | 'user' | null
   created_by: string
@@ -366,6 +371,17 @@ export interface Card {
   position: number
   created_at: string
   updated_at: string
+}
+
+export interface CardEvent {
+  id: number
+  card_id: string
+  board_id: string
+  actor_id: string
+  actor_type: 'agent' | 'user'
+  action: 'created' | 'moved' | 'updated' | 'deleted'
+  meta: string
+  created_at: string
 }
 
 export interface LaneRule {

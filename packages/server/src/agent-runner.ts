@@ -9,6 +9,7 @@ import {
   type AgentSessionEvent,
 } from '@mariozechner/pi-coding-agent'
 import path from 'path'
+import fs from 'fs'
 import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting } from './db.js'
 import { eventBus } from './event-bus.js'
 import { buildAgentTools } from './platform-tools.js'
@@ -52,6 +53,34 @@ function resolveWorkspaceDir(): string {
   return path.join(dataDir, 'workspace')
 }
 
+const DEFAULT_SOP = `# Standard Operating Procedure
+
+This document governs how agents and humans collaborate on this platform.
+Admin can edit this file at any time — it is re-read at the start of every agent session.
+
+## Task Management
+
+- Any agent with the "assistant" role may create cards on the board.
+- Cards must have a clear title describing the task.
+- When a task is complete, fill in the \`result\` field before moving the card to Done.
+- Do not modify another agent's card description without explicit permission.
+- Use the \`board_move_card\` tool to update a card's status by moving it to the correct lane.
+
+## Communication
+
+- Use the shared channel for announcements and status updates.
+- Tag the relevant agent by name when handing off a task.
+- Keep messages concise and actionable.
+`
+
+function ensureSopFile(workspaceDir: string): void {
+  fs.mkdirSync(workspaceDir, { recursive: true })
+  const sopPath = path.join(workspaceDir, 'SOP.md')
+  if (!fs.existsSync(sopPath)) {
+    fs.writeFileSync(sopPath, DEFAULT_SOP, 'utf-8')
+  }
+}
+
 function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
   // ── Layer 1: Platform prompt ─────────────────────────────────────────────
   const companyName = getSetting('company_name') ?? 'this company'
@@ -61,13 +90,19 @@ function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
     .replace('{company_name}', companyName)
     .replace('{working_directory}', workspaceDir)
 
-  // ── Layer 2: Role prompts ────────────────────────────────────────────────
+  // ── Layer 2: SOP.md ──────────────────────────────────────────────────────
+  const sopPath = path.join(workspaceDir, 'SOP.md')
+  const sopBlock = fs.existsSync(sopPath)
+    ? `## Standard Operating Procedure\n${fs.readFileSync(sopPath, 'utf-8').trim()}`
+    : ''
+
+  // ── Layer 3: Role prompts ────────────────────────────────────────────────
   const roles = getAgentRoles(agent.id)
   const roleBlock = roles.length
     ? roles.map((r) => `## Role: ${r.name}\n${r.prompt}`).join('\n\n')
     : ''
 
-  // ── Layer 3: Identity prompt ─────────────────────────────────────────────
+  // ── Layer 4: Identity prompt ─────────────────────────────────────────────
   const projectDir = path.dirname(workspaceDir)
   const identityBlock = agent.system_prompt
     .trim()
@@ -92,10 +127,14 @@ function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
     `- workspace_read / workspace_write — read and write files in your workspace\n` +
     `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +
     `- todo_add / todo_complete — manage your task list (shown in your system prompt)\n` +
+    `- board_list_cards — list cards on a board, optionally filtered by lane or assignee\n` +
+    `- board_create_card — create a new card on a board (you will be recorded as creator)\n` +
+    `- board_update_card — update a card's title, description, result, or assignee\n` +
+    `- board_move_card — move a card to a different lane\n` +
     `Use memory_add proactively whenever you learn something worth remembering across conversations.\n` +
     `Use todo_add to track multi-step work you intend to continue.`
 
-  return [platformPrompt, roleBlock, identityBlock, toolsBlock, memoryBlock, todoBlock]
+  return [platformPrompt, sopBlock, roleBlock, identityBlock, toolsBlock, memoryBlock, todoBlock]
     .filter(Boolean)
     .join('\n\n')
 }
@@ -120,6 +159,7 @@ async function createLiveSession(
   if (!model) throw new Error(`Model not found: ${config.provider}/${config.modelId}`)
 
   const workspaceDir = resolveWorkspaceDir()
+  ensureSopFile(workspaceDir)
   const systemPrompt = buildSystemPrompt(agent, workspaceDir)
   const sessionsDir = path.join(dataDir, 'sessions', agent.id)
 

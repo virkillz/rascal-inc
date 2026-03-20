@@ -365,8 +365,8 @@ function MessageBubble({
           <div
             className="max-w-[70%] rounded-2xl rounded-tr-sm px-4 py-3"
             style={{
-              background: 'rgba(245,158,11,0.28)',
-              border: '1px solid rgba(245,158,11,0.55)',
+              background: 'rgba(0,0,0,0.35)',
+              border: '1px solid rgba(255,255,255,0.20)',
             }}
           >
             {editing ? (
