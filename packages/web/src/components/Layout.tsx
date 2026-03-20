@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store.ts'
 import { useTheme } from '../contexts/ThemeContext.tsx'
 import { api, type User } from '../api.ts'
@@ -19,6 +19,8 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
     api.auth.logout().finally(onLogout)
   }
 
+  const [showCompanyModal, setShowCompanyModal] = useState(false)
+
   const thinkingCount = Object.values(agentStatus).filter(s => s === 'thinking').length
   const now = new Date()
   const quarter = Math.floor(now.getMonth() / 3) + 1
@@ -33,12 +35,9 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
         style={{ height: '52px', borderBottom: '1px solid rgba(255,255,255,0.10)' }}
       >
         {/* Brand */}
-        <div className="flex items-center gap-3">
-          <div
-            className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgb(var(--accent))' }}
-          >
-            <BarChartIcon />
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setShowCompanyModal(true)}>
+          <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
@@ -169,6 +168,70 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
           <Outlet />
         </main>
       </div>
+
+      {/* ── Company Info Modal ── */}
+      {showCompanyModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowCompanyModal(false)}
+        >
+          <div
+            className="w-full max-w-md card p-8 space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                  {settings?.companyName || 'Rascal Inc'}
+                </h2>
+                <span className="text-xs font-medium" style={{ color: 'var(--muted)' }}>
+                  Command Center · Q{quarter} {year}
+                </span>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }} />
+
+            {/* Mission */}
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted)' }}>
+                Mission
+              </div>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--subtle)' }}>
+                {settings?.companyMission || 'No mission statement set.'}
+              </p>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg px-4 py-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--muted)' }}>Staff</div>
+                <div className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{agents.length}</div>
+                <div className="text-xs" style={{ color: 'var(--muted)' }}>AI agents</div>
+              </div>
+              <div className="rounded-lg px-4 py-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--muted)' }}>Active</div>
+                <div className="text-2xl font-bold" style={{ color: thinkingCount > 0 ? 'var(--status-green)' : 'var(--text-primary)' }}>{thinkingCount}</div>
+                <div className="text-xs" style={{ color: 'var(--muted)' }}>working now</div>
+              </div>
+            </div>
+
+            {/* Close */}
+            <button
+              className="btn-ghost w-full text-center"
+              onClick={() => setShowCompanyModal(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -219,13 +282,6 @@ function HudStat({ icon, label, value, highlight }: {
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
-function BarChartIcon() {
-  return (
-    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#0a0f1a' }}>
-      <path d="M3 3v18h18M7 16v-5m4 5V8m4 8v-3" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-    </svg>
-  )
-}
 
 function MessagesIcon() {
   return (
