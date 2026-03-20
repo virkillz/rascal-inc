@@ -1,24 +1,24 @@
 import { useState } from 'react'
-import { api, type Provider } from '../api.ts'
+import { api, type Provider, type User } from '../api.ts'
 import { useStore } from '../store.ts'
 
 
-type Step = 'company' | 'provider' | 'account' | 'start'
+type Step = 'company' | 'provider' | 'account'
 
 interface OnboardingProps {
-  onComplete: () => void
+  onComplete: (user?: User) => void
 }
 
 export default function Onboarding({ onComplete, startAtAccount }: OnboardingProps & { startAtAccount?: boolean }) {
   const { settings } = useStore()
   const [step, setStep] = useState<Step>(startAtAccount ? 'account' : 'company')
-  const [companyName, setCompanyName] = useState(startAtAccount ? (settings?.companyName ?? '') : '')
-  const [companyMission, setCompanyMission] = useState('')
+  const [companyName, setCompanyName] = useState(startAtAccount ? (settings?.companyName ?? '') : 'Rascal Inc')
+  const [companyMission, setCompanyMission] = useState('A highly questionable organization run entirely by AI agents with just enough intelligence to be dangerous and just enough mischief to make it interesting.')
   const [providers, setProviders] = useState<Provider[]>([])
   const [selectedProvider, setSelectedProvider] = useState<string>('openrouter')
   const [apiKey, setApiKey] = useState('')
-  const [adminUsername, setAdminUsername] = useState('')
-  const [adminDisplayName, setAdminDisplayName] = useState('')
+  const [adminUsername, setAdminUsername] = useState('chief')
+  const [adminDisplayName, setAdminDisplayName] = useState('Chief Rascal')
   const [adminPassword, setAdminPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -67,7 +67,8 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
         password: adminPassword,
         companyName: companyName.trim(),
       })
-      setStep('start')
+      const user = await api.auth.login(adminUsername.trim(), adminPassword)
+      onComplete(user)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
@@ -79,41 +80,44 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
   const others = providers.filter((p) => !p.recommended)
 
   return (
-    <div className="min-h-screen bg-surface-0 flex items-center justify-center p-6">
-      {/* Background glow */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-accent/5 rounded-full blur-[120px]" />
-      </div>
-
+    <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md relative">
+        <div className="card p-8 space-y-6">
         {/* Logo */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">R</span>
-            </div>
-            <span className="text-white font-semibold text-lg">rascal-inc</span>
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-2">
+            <img src="/logo.png" alt="Rascal Inc" className="w-36 h-36 rounded-lg object-cover" />
           </div>
+          <div className="text-white font-semibold text-lg">Rascal-Inc</div>
           <p className="text-muted text-sm">virtual company platform</p>
         </div>
 
         {/* Step indicators */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {(['company', 'provider', 'account', 'start'] as Step[]).map((s, i) => (
+        <div className="flex items-center justify-center gap-2">
+          {(['company', 'provider', 'account'] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full transition-colors ${
-                s === step ? 'bg-accent' : steps_done(s, step) ? 'bg-accent/40' : 'bg-surface-3'
-              }`} />
-              {i < 3 && <div className="w-6 h-px bg-surface-3" />}
+              <button
+                className={`w-2.5 h-2.5 rounded-full transition-all ${
+                  s === step
+                    ? 'bg-accent scale-110'
+                    : steps_done(s, step)
+                    ? 'bg-accent/40 hover:bg-accent/70 cursor-pointer'
+                    : 'bg-white/20 cursor-default'
+                }`}
+                onClick={() => { if (steps_done(s, step)) { setError(''); setStep(s) } }}
+                disabled={!steps_done(s, step)}
+                aria-label={`Go to ${s} step`}
+              />
+              {i < 2 && <div className="w-6 h-px bg-white/20" />}
             </div>
           ))}
         </div>
 
         {/* ── Step 1: Company ── */}
         {step === 'company' && (
-          <div className="card p-6 space-y-5">
+          <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-semibold text-white">Your company</h1>
+              <h1 className="text-xl font-semibold text-white">Let's setup your virtual company!</h1>
               <p className="text-sm text-muted mt-1">Give your virtual company a name and purpose.</p>
             </div>
 
@@ -150,18 +154,10 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
 
         {/* ── Step 2: Provider ── */}
         {step === 'provider' && (
-          <div className="card p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <button
-                className="text-muted hover:text-white transition-colors text-sm"
-                onClick={() => { setError(''); setStep('company') }}
-              >
-                ← Back
-              </button>
-              <div>
-                <h1 className="text-xl font-semibold text-white">Connect a provider</h1>
-                <p className="text-sm text-muted mt-0.5">Your agents need an LLM provider to think.</p>
-              </div>
+          <div className="space-y-5">
+            <div>
+              <h1 className="text-xl font-semibold text-white">Connect a provider</h1>
+              <p className="text-sm text-muted mt-0.5">Your agents need an LLM provider to think.</p>
             </div>
 
             {recommended && (
@@ -180,6 +176,7 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
                   <input
                     className="input text-xs mt-1"
                     type="password"
+                    autoComplete="off"
                     placeholder="sk-or-..."
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
@@ -214,6 +211,7 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
                   <input
                     className="input text-xs mt-2"
                     type="password"
+                    autoComplete="off"
                     placeholder="API key"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
@@ -241,20 +239,10 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
 
         {/* ── Step 3: Admin account ── */}
         {step === 'account' && (
-          <div className="card p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              {!startAtAccount && (
-                <button
-                  className="text-muted hover:text-white transition-colors text-sm"
-                  onClick={() => { setError(''); setStep('provider') }}
-                >
-                  ← Back
-                </button>
-              )}
-              <div>
-                <h1 className="text-xl font-semibold text-white">Create your account</h1>
-                <p className="text-sm text-muted mt-0.5">You'll use this to log in as the platform admin.</p>
-              </div>
+          <div className="space-y-5">
+            <div>
+              <h1 className="text-xl font-semibold text-white">Create your account</h1>
+              <p className="text-sm text-muted mt-0.5">You'll use this to log in as the platform admin.</p>
             </div>
 
             <div className="space-y-4">
@@ -265,7 +253,6 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
                   placeholder="admin"
                   value={adminUsername}
                   onChange={(e) => setAdminUsername(e.target.value)}
-                  autoFocus
                 />
               </div>
               <div>
@@ -282,10 +269,12 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
                 <input
                   className="input"
                   type="password"
+                  autoComplete="new-password"
                   placeholder="Choose a password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateAccount()}
+                  autoFocus
                 />
               </div>
             </div>
@@ -298,42 +287,14 @@ export default function Onboarding({ onComplete, startAtAccount }: OnboardingPro
           </div>
         )}
 
-        {/* ── Step 4: How to start ── */}
-        {step === 'start' && (
-          <div className="card p-6 space-y-5">
-            <div>
-              <h1 className="text-xl font-semibold text-white">How do you want to start?</h1>
-              <p className="text-sm text-muted mt-1">You can always change this later.</p>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                className="relative border border-border rounded-xl p-4 text-left opacity-40 cursor-not-allowed"
-                disabled
-              >
-                <div className="text-sm font-medium text-white mb-1">Install a template</div>
-                <div className="text-xs text-muted">Video team, blog team, and more.</div>
-                <div className="absolute top-2 right-2 text-[10px] bg-surface-3 text-muted px-1.5 py-0.5 rounded-full">
-                  soon
-                </div>
-              </button>
-
-              <button
-                className="border border-accent/40 bg-accent/5 hover:bg-accent/10 rounded-xl p-4 text-left transition-colors"
-                onClick={onComplete}
-              >
-                <div className="text-sm font-medium text-white mb-1">Build your team</div>
-                <div className="text-xs text-muted">Create agents manually.</div>
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )
 }
 
 function steps_done(s: Step, current: Step): boolean {
-  const order: Step[] = ['company', 'provider', 'account', 'start']
+  const order: Step[] = ['company', 'provider', 'account']
   return order.indexOf(s) < order.indexOf(current)
 }

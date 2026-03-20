@@ -307,9 +307,20 @@ You can read and modify source files to help with bug fixes, new features, and p
       },
     ]
     for (const a of defaultAgents) {
+      const agentId = randomUUID()
       db.prepare(
         'INSERT INTO agents (id, name, role, description, system_prompt, model_config, avatar_color, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run(randomUUID(), a.name, a.role, a.description, a.system_prompt, '{}', a.avatar_color, a.avatar_url)
+      ).run(agentId, a.name, a.role, a.description, a.system_prompt, '{}', a.avatar_color, a.avatar_url)
+
+      // Seed group chat monitoring schedule for each default agent
+      db.prepare(
+        'INSERT INTO agent_schedules (agent_id, cron, prompt, label, enabled) VALUES (?, ?, ?, ?, 1)',
+      ).run(
+        agentId,
+        '*/15 * * * *',
+        'Check the group chat, and decide if you want to post something. You can decide to post or not.',
+        'Group chat monitoring',
+      )
     }
   }
 }

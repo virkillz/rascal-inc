@@ -21,6 +21,7 @@ export interface Settings {
   needsSetup: boolean
   companyName: string
   companyMission: string
+  companyLogo: string
   defaultModel: { provider: string; modelId: string; thinkingLevel: string }
 }
 

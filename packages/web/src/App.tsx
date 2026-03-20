@@ -15,6 +15,7 @@ import SettingsExtensions from './pages/settings/Extensions.tsx'
 import SettingsSkills from './pages/settings/Skills.tsx'
 import SettingsRoles from './pages/settings/Roles.tsx'
 import SettingsAppearance from './pages/settings/Appearance.tsx'
+import SettingsCompany from './pages/settings/Company.tsx'
 import Workspace from './pages/Workspace.tsx'
 import Board from './pages/Board.tsx'
 import Channels from './pages/Channels.tsx'
@@ -87,7 +88,7 @@ export default function App() {
     return (
       <ThemeProvider>
         <Onboarding
-          onComplete={() => loadSettings()}
+          onComplete={(user) => { if (user) { setCurrentUser(user); setAuthState('authenticated') } loadSettings() }}
           startAtAccount={!settings.firstRun && settings.needsSetup}
         />
       </ThemeProvider>
@@ -117,7 +118,8 @@ export default function App() {
             <Route path="/agents/:id/settings" element={<AgentSettings />} />
             <Route path="/workspace" element={<Workspace />} />
             <Route path="/settings" element={<Settings />}>
-              <Route index element={<Navigate to="/settings/provider" replace />} />
+              <Route index element={<Navigate to="/settings/company" replace />} />
+              <Route path="company" element={<SettingsCompany />} />
               <Route path="provider" element={<SettingsProvider />} />
               <Route path="model" element={<SettingsModel />} />
               <Route path="extensions" element={<SettingsExtensions />} />

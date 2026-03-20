@@ -72,6 +72,7 @@ export function createSettingsRouter(): Router {
       needsSetup: userCount === 0,
       companyName: getSetting('company_name') ?? '',
       companyMission: getSetting('company_mission') ?? '',
+      companyLogo: getSetting('company_logo') ?? '/rascals.png',
       defaultModel: getSetting('default_model')
         ? JSON.parse(getSetting('default_model')!)
         : { provider: 'openrouter', modelId: 'moonshotai/kimi-k2.5', thinkingLevel: 'low' },
@@ -80,13 +81,15 @@ export function createSettingsRouter(): Router {
 
   // POST /api/settings — save company info
   router.post('/', (req, res) => {
-    const { companyName, companyMission, defaultModel } = req.body as {
+    const { companyName, companyMission, companyLogo, defaultModel } = req.body as {
       companyName?: string
       companyMission?: string
+      companyLogo?: string
       defaultModel?: object
     }
     if (companyName !== undefined) setSetting('company_name', companyName)
     if (companyMission !== undefined) setSetting('company_mission', companyMission)
+    if (companyLogo !== undefined) setSetting('company_logo', companyLogo)
     if (defaultModel !== undefined) setSetting('default_model', JSON.stringify(defaultModel))
     res.json({ ok: true })
   })
