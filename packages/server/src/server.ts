@@ -18,6 +18,7 @@ import { createUsersRouter, createSetupRouter } from './api/users.js'
 import { createRolesRouter } from './api/roles.js'
 import { createBoardsRouter } from './api/boards.js'
 import { createChannelsRouter } from './api/channels.js'
+import { createSkillsRouter } from './api/skills.js'
 
 export function createApp(opts: { webDistDir?: string; workspaceDir?: string } = {}) {
   const app = express()
@@ -39,6 +40,7 @@ export function createApp(opts: { webDistDir?: string; workspaceDir?: string } =
   app.use('/api/agents', createSchedulesRouter())
   app.use('/api/workspace', createWorkspaceRouter(opts.workspaceDir ?? process.cwd()))
   app.use('/api/plugins', createPluginsRouter())
+  app.use('/api/skills', createSkillsRouter(opts.workspaceDir ?? process.cwd()))
 
   // ── New platform primitives ─────────────────────────────────────────────────
   app.use('/api/roles', createRolesRouter())

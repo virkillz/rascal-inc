@@ -18,6 +18,7 @@ export interface ModelConfig {
   modelId: string
   thinkingLevel?: string
   tools?: string[]
+  allowedSkills?: string[]
 }
 
 export interface AgentRecord {
@@ -125,11 +126,18 @@ async function createLiveSession(
     workspaceDir,
   })
 
+  const allowedSkills: string[] | undefined = config.allowedSkills
+
   const loader = new DefaultResourceLoader({
     cwd: workspaceDir,
     systemPromptOverride: () => systemPrompt,
     agentsFilesOverride: () => ({ agentsFiles: [] }),
-    noSkills: true,
+    ...(allowedSkills && {
+      skillsOverride: (base) => ({
+        ...base,
+        skills: base.skills.filter((s) => allowedSkills.includes(s.name)),
+      }),
+    }),
   })
   await loader.reload()
 

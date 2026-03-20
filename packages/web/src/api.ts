@@ -157,6 +157,15 @@ export const api = {
       req<{ ok: boolean }>('DELETE', `/workspace?path=${encodeURIComponent(filePath)}`),
   },
 
+  // ─── Skills ───────────────────────────────────────────────────────────────
+
+  skills: {
+    list: () => req<Skill[]>('GET', '/skills'),
+    install: (repo: string, branch?: string) =>
+      req<{ ok: boolean; name: string; description: string }>('POST', '/skills/install', { repo, branch }),
+    uninstall: (name: string) => req<{ ok: boolean }>('DELETE', `/skills/${encodeURIComponent(name)}`),
+  },
+
   // ─── Plugins ──────────────────────────────────────────────────────────────
 
   plugins: {
@@ -234,7 +243,7 @@ export interface Agent {
   description: string
   system_prompt: string
   model_config: string
-  modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string }
+  modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string; allowedSkills?: string[] }
   source: string
   avatar_color: string
   is_active: number
@@ -296,6 +305,12 @@ export interface FileEntry {
   uploaded_by: string | null
   created_at: string
   updated_at: string
+}
+
+export interface Skill {
+  name: string
+  description: string
+  repo: string | null
 }
 
 export interface PluginEnvVar {

@@ -10,6 +10,7 @@ import AgentChat from './pages/AgentChat.tsx'
 import Settings from './pages/Settings.tsx'
 import Workspace from './pages/Workspace.tsx'
 import Plugins from './pages/Plugins.tsx'
+import Skills from './pages/Skills.tsx'
 import Board from './pages/Board.tsx'
 import Channels from './pages/Channels.tsx'
 import Roles from './pages/Roles.tsx'
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="/roles" element={<Roles />} />
             <Route path="/workspace" element={<Workspace />} />
             <Route path="/plugins" element={<Plugins />} />
+            <Route path="/skills" element={<Skills />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
