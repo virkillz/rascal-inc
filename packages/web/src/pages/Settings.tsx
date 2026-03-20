@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { to: '/settings/extensions', label: 'Extensions' },
   { to: '/settings/skills', label: 'Skills' },
   { to: '/settings/roles', label: 'Roles' },
+  { to: '/settings/appearance', label: 'Appearance' },
 ]
 
 export default function Settings() {

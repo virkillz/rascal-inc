@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { execSync, spawn } from 'child_process'
 import { Type } from '@sinclair/typebox'
 import type { RascalPlugin, ToolContext } from '../types.js'
@@ -8,15 +9,15 @@ function ok(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} }
 }
 
-/** The subdirectory inside workspaceDir where the remotion project lives. */
-const REMOTION_SUBDIR = 'remotion-engine'
+/** The remotion engine lives alongside the plugin source, not in the user workspace. */
+const REMOTION_DIR = path.join(fileURLToPath(import.meta.url), '..', 'remotion-engine')
 
-function remotionDir(workspaceDir: string) {
-  return path.join(workspaceDir, REMOTION_SUBDIR)
+function remotionDir(_workspaceDir?: string) {
+  return REMOTION_DIR
 }
 
-function isRemotionInstalled(workspaceDir: string): boolean {
-  return fs.existsSync(path.join(remotionDir(workspaceDir), 'node_modules', 'remotion'))
+function isRemotionInstalled(): boolean {
+  return fs.existsSync(path.join(REMOTION_DIR, 'node_modules', 'remotion'))
 }
 
 export const remotionPlugin: RascalPlugin = {
@@ -28,10 +29,10 @@ export const remotionPlugin: RascalPlugin = {
     toolIds: ['remotion_render', 'remotion_preview'],
   },
 
-  async setup(workspaceDir: string) {
-    const rDir = remotionDir(workspaceDir)
+  async setup(_workspaceDir: string) {
+    const rDir = remotionDir()
 
-    if (isRemotionInstalled(workspaceDir)) {
+    if (isRemotionInstalled()) {
       console.log('  [remotion] already installed, skipping setup')
       return
     }
@@ -110,7 +111,7 @@ Config.setOverwriteOutput(true)
   },
 
   getTools(ctx: ToolContext) {
-    const rDir = remotionDir(ctx.workspaceDir)
+    const rDir = remotionDir()
 
     return [
       // ── remotion_render ───────────────────────────────────────────────────
