@@ -246,6 +246,7 @@ export interface Agent {
   modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string; allowedSkills?: string[] }
   source: string
   avatar_color: string
+  avatar_url: string
   is_active: number
   created_at: string
   updated_at: string

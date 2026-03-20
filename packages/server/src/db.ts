@@ -55,6 +55,7 @@ function runMigrations(db: DB): void {
       model_config  TEXT NOT NULL DEFAULT '{}',
       source        TEXT NOT NULL DEFAULT 'user',
       avatar_color  TEXT NOT NULL DEFAULT '#7c6af7',
+      avatar_url    TEXT NOT NULL DEFAULT '',
       is_active     INTEGER NOT NULL DEFAULT 1,
       created_at    TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
@@ -218,6 +219,7 @@ function runMigrations(db: DB): void {
 
   // Additive column migrations for existing installs
   addColumnIfNotExists(db, 'agents', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
+  addColumnIfNotExists(db, 'agents', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'agent_schedules', 'skip_if_no_todos', 'INTEGER NOT NULL DEFAULT 0')
 }
 

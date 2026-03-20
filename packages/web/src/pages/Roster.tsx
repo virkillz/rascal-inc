@@ -167,16 +167,25 @@ function EmployeeCard({ agent, status, onClick, onDelete }: {
       >
         {/* Avatar */}
         <div className="relative flex-shrink-0">
-          <div
-            className="w-11 h-11 rounded-full flex items-center justify-center text-base font-bold"
-            style={{
-              backgroundColor: agent.avatar_color + '22',
-              border: `2px solid ${agent.avatar_color}55`,
-              color: agent.avatar_color,
-            }}
-          >
-            {agent.name[0].toUpperCase()}
-          </div>
+          {agent.avatar_url ? (
+            <img
+              src={agent.avatar_url}
+              alt={agent.name}
+              className="w-11 h-11 rounded-full object-cover"
+              style={{ border: `2px solid ${agent.avatar_color}55` }}
+            />
+          ) : (
+            <div
+              className="w-11 h-11 rounded-full flex items-center justify-center text-base font-bold"
+              style={{
+                backgroundColor: agent.avatar_color + '22',
+                border: `2px solid ${agent.avatar_color}55`,
+                color: agent.avatar_color,
+              }}
+            >
+              {agent.name[0].toUpperCase()}
+            </div>
+          )}
           {/* Status dot */}
           <span
             className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${status === 'thinking' ? 'animate-pulse-dot' : ''}`}

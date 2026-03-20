@@ -14,7 +14,7 @@ function getDefaultModel(): ModelConfig {
       return JSON.parse(stored) as ModelConfig
     } catch { /* fall through */ }
   }
-  return { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4-6', thinkingLevel: 'low' }
+  return { provider: 'openrouter', modelId: 'moonshotai/kimi-k2.5', thinkingLevel: 'low' }
 }
 
 function buildSchedulerPrompt(schedule: ScheduleRow, agentName: string): string {

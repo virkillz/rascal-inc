@@ -17,7 +17,7 @@ const PROVIDERS = [
 
 // Default model suggestions per provider
 const DEFAULT_MODELS: Record<string, string> = {
-  openrouter:     'anthropic/claude-sonnet-4-6',
+  openrouter:     'moonshotai/kimi-k2.5',
   anthropic:      'claude-sonnet-4-6',
   openai:         'gpt-4o',
   google:         'gemini-2.5-flash',
@@ -74,7 +74,7 @@ export function createSettingsRouter(): Router {
       companyMission: getSetting('company_mission') ?? '',
       defaultModel: getSetting('default_model')
         ? JSON.parse(getSetting('default_model')!)
-        : { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4-6', thinkingLevel: 'low' },
+        : { provider: 'openrouter', modelId: 'moonshotai/kimi-k2.5', thinkingLevel: 'low' },
     })
   })
 

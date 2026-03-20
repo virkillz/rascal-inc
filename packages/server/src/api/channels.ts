@@ -25,7 +25,7 @@ function getDefaultModel() {
   if (stored) {
     try { return JSON.parse(stored) } catch { /* fall through */ }
   }
-  return { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4-6', thinkingLevel: 'low' }
+  return { provider: 'openrouter', modelId: 'moonshotai/kimi-k2.5', thinkingLevel: 'low' }
 }
 
 /** Build context string from recent channel messages to pass to the agent. */

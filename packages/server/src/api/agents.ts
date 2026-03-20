@@ -12,6 +12,7 @@ export interface AgentRow {
   model_config: string
   source: string
   avatar_color: string
+  avatar_url: string
   created_at: string
   updated_at: string
 }
@@ -21,8 +22,15 @@ const AVATAR_COLORS = [
   '#6ac5f7', '#f76ac0', '#a0f76a', '#f7906a',
 ]
 
+const AVATAR_COUNT = 17
+
 function randomColor(): string {
   return AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
+}
+
+function randomAvatarUrl(): string {
+  const n = Math.floor(Math.random() * AVATAR_COUNT) + 1
+  return `/default_avatar/avatar_${n}.jpg`
 }
 
 export function createAgentsRouter(): Router {
@@ -59,8 +67,8 @@ export function createAgentsRouter(): Router {
 
     const id = randomUUID()
     getDb().prepare(`
-      INSERT INTO agents (id, name, role, description, system_prompt, model_config, avatar_color)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, role, description, system_prompt, model_config, avatar_color, avatar_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       name.trim(),
@@ -69,6 +77,7 @@ export function createAgentsRouter(): Router {
       systemPrompt?.trim() ?? '',
       JSON.stringify(modelConfig ?? {}),
       randomColor(),
+      randomAvatarUrl(),
     )
 
     const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(id) as unknown as AgentRow
