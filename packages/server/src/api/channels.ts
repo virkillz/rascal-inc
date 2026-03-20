@@ -56,8 +56,8 @@ async function triggerAgentResponse(
 ): Promise<void> {
   const context = buildChannelContext(channelId)
   const prompt = context
-    ? `${context}\n\nYou have been mentioned or are responding to the above conversation. Reply to: ${triggerMessage}`
-    : triggerMessage
+    ? `${context}\n\nYou are ${agent.name}. You have been mentioned. Reply as yourself to: ${triggerMessage}`
+    : `You are ${agent.name}. Reply as yourself to: ${triggerMessage}`
 
   const agentRecord: AgentRecord = {
     id: agent.id,

@@ -209,7 +209,7 @@ export default function AgentChat() {
                   </div>
                   <div
                     className="rounded-2xl rounded-tl-sm px-4 py-3"
-                    style={{ background: 'rgba(8,18,40,0.70)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+                    style={{ background: 'rgba(30,50,90,0.90)', border: '1px solid rgba(255,255,255,0.15)' }}
                   >
                     <div className="flex gap-1 items-center h-4">
                       <div className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0ms]" style={{ background: 'var(--muted)' }} />
@@ -953,7 +953,7 @@ function MessageBubble({ msg, agentName, agentColor, agentAvatarUrl }: {
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[70%] bg-accent/20 border border-accent/30 rounded-2xl rounded-tr-sm px-4 py-3">
+        <div className="max-w-[70%] rounded-2xl rounded-tr-sm px-4 py-3" style={{ background: 'rgba(245,158,11,0.28)', border: '1px solid rgba(245,158,11,0.55)' }}>
           <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{msg.content}</p>
         </div>
       </div>
@@ -973,7 +973,7 @@ function MessageBubble({ msg, agentName, agentColor, agentAvatarUrl }: {
       </div>
       <div
         className="max-w-[70%] rounded-2xl rounded-tl-sm px-4 py-3"
-        style={{ background: 'rgba(8,18,40,0.72)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+        style={{ background: 'rgba(30,50,90,0.90)', border: '1px solid rgba(255,255,255,0.15)' }}
       >
         <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{msg.content}</p>
       </div>

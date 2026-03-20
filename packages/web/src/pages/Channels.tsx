@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, type Channel, type ChannelMessage, type Agent } from '../api.ts'
+import { api, type Channel, type ChannelMessage, type Agent, type User } from '../api.ts'
 import { useStore } from '../store.ts'
 
 export default function Channels() {
@@ -11,9 +11,16 @@ export default function Channels() {
   const [messages, setMessages] = useState<ChannelMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [showMembers, setShowMembers] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const membersRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    api.auth.me().then(setCurrentUser).catch(() => {})
     loadChannels()
   }, [])
 
@@ -25,23 +32,43 @@ export default function Channels() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Close members panel on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (membersRef.current && !membersRef.current.contains(e.target as Node)) {
+        setShowMembers(false)
+      }
+    }
+    if (showMembers) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showMembers])
+
   // Subscribe to WS channel:message events
   useEffect(() => {
     function handler(event: MessageEvent) {
       try {
         const data = JSON.parse(event.data)
         if (data.type === 'channel:message' && data.channelId === activeChannel?.id) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: data.messageId,
-              channel_id: data.channelId,
-              sender_id: data.senderId,
-              sender_type: data.senderType,
-              content: data.content,
-              created_at: new Date().toISOString(),
-            },
-          ])
+          const incoming: ChannelMessage = {
+            id: data.messageId,
+            channel_id: data.channelId,
+            sender_id: data.senderId,
+            sender_type: data.senderType,
+            content: data.content,
+            created_at: new Date().toISOString(),
+          }
+          setMessages((prev) => {
+            // Replace optimistic message from current user if content matches
+            const optimisticIdx = prev.findIndex(
+              (m) => m.id > 1_000_000_000_000 && m.sender_id === data.senderId && m.content === data.content
+            )
+            if (optimisticIdx !== -1) {
+              const next = [...prev]
+              next[optimisticIdx] = incoming
+              return next
+            }
+            return [...prev, incoming]
+          })
         }
       } catch { /* ignore */ }
     }
@@ -68,10 +95,28 @@ export default function Channels() {
     setSending(true)
     const content = input.trim()
     setInput('')
+    setMentionQuery(null)
+
+    // Optimistic update — show immediately like AgentChat
+    const optimisticId = Date.now()
+    if (currentUser) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: optimisticId,
+          channel_id: activeChannel.id,
+          sender_id: currentUser.id,
+          sender_type: 'user',
+          content,
+          created_at: new Date().toISOString(),
+        },
+      ])
+    }
+
     try {
       await api.channels.send(activeChannel.id, content)
-      // Optimistic: message will arrive via WS or re-load
     } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
       setInput(content)
     } finally {
       setSending(false)
@@ -86,15 +131,105 @@ export default function Channels() {
     if (msg.sender_type === 'agent') {
       return agentById(msg.sender_id)?.name ?? msg.sender_id
     }
-    return msg.sender_id // user display_name would need a user lookup; simplified here
+    if (currentUser && msg.sender_id === currentUser.id) return currentUser.display_name
+    return msg.sender_id
   }
 
   function senderColor(msg: ChannelMessage): string {
     if (msg.sender_type === 'agent') {
       return agentById(msg.sender_id)?.avatar_color ?? '#7c6af7'
     }
+    if (currentUser && msg.sender_id === currentUser.id) {
+      return currentUser.avatar_color ?? '#6ac5f7'
+    }
     return '#6ac5f7'
   }
+
+  function isOwnMessage(msg: ChannelMessage): boolean {
+    return msg.sender_type === 'user' && !!currentUser && msg.sender_id === currentUser.id
+  }
+
+  // Participants = current user + all agents
+  function participants(): { name: string; color: string; type: 'agent' | 'user' }[] {
+    const list: { name: string; color: string; type: 'agent' | 'user' }[] = []
+    if (currentUser) {
+      list.push({ name: currentUser.display_name, color: currentUser.avatar_color ?? '#6ac5f7', type: 'user' })
+    }
+    for (const agent of agents) {
+      list.push({ name: agent.name, color: agent.avatar_color ?? '#7c6af7', type: 'agent' })
+    }
+    return list
+  }
+
+  // @mention autocomplete
+  const filteredMentions = mentionQuery !== null
+    ? agents.filter((a) => a.name.toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 6)
+    : []
+
+  function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value
+    setInput(val)
+
+    // Detect @mention at cursor
+    const cursor = e.target.selectionStart ?? val.length
+    const textBeforeCursor = val.slice(0, cursor)
+    const match = textBeforeCursor.match(/@([\w-]*)$/)
+    if (match) {
+      setMentionQuery(match[1])
+      setMentionIndex(0)
+    } else {
+      setMentionQuery(null)
+    }
+  }
+
+  function insertMention(agentName: string) {
+    const cursor = inputRef.current?.selectionStart ?? input.length
+    const textBefore = input.slice(0, cursor)
+    const textAfter = input.slice(cursor)
+    const match = textBefore.match(/@([\w-]*)$/)
+    if (!match) return
+    const newBefore = textBefore.slice(0, textBefore.length - match[0].length) + `@${agentName} `
+    setInput(newBefore + textAfter)
+    setMentionQuery(null)
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+        inputRef.current.selectionStart = newBefore.length
+        inputRef.current.selectionEnd = newBefore.length
+      }
+    }, 0)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionQuery !== null && filteredMentions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex((i) => (i + 1) % filteredMentions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex((i) => (i - 1 + filteredMentions.length) % filteredMentions.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        insertMention(filteredMentions[mentionIndex].name)
+        return
+      }
+      if (e.key === 'Escape') {
+        setMentionQuery(null)
+        return
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
+  const members: { name: string; color: string; type: 'agent' | 'user' }[] = participants()
 
   return (
     <div className="flex h-full">
@@ -143,42 +278,141 @@ export default function Channels() {
               }}
             >
               <span className="text-muted text-sm">#</span>
-              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{activeChannel.name}</span>
+              <span className="text-sm font-semibold flex-1" style={{ color: 'var(--text-primary)' }}>
+                {activeChannel.name}
+              </span>
+
+              {/* Participant count button */}
+              <div className="relative" ref={membersRef}>
+                <button
+                  onClick={() => setShowMembers((v) => !v)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/8"
+                  style={{ color: showMembers ? 'var(--text-primary)' : 'var(--muted)' }}
+                  title="Channel members"
+                >
+                  <PeopleIcon />
+                  <span>{members.length}</span>
+                </button>
+
+                {/* Members popover */}
+                {showMembers && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-52 rounded-xl shadow-2xl z-50 overflow-hidden"
+                    style={{
+                      background: 'rgba(8,18,40,0.95)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      backdropFilter: 'blur(20px)',
+                      WebkitBackdropFilter: 'blur(20px)',
+                    }}
+                  >
+                    <div className="px-3 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                        Members — {members.length}
+                      </span>
+                    </div>
+                    <div className="py-1 max-h-64 overflow-y-auto">
+                      {members.length === 0 ? (
+                        <p className="text-xs text-muted px-3 py-3">No activity yet</p>
+                      ) : (
+                        members.map((m) => (
+                          <div key={m.name} className="flex items-center gap-2.5 px-3 py-2">
+                            <div
+                              className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
+                              style={{ backgroundColor: m.color }}
+                            >
+                              {m.name[0]?.toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                                {m.name}
+                              </p>
+                              {m.type === 'agent' && (
+                                <p className="text-[10px] text-muted">AI agent</p>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              {messages.map((msg) => (
-                <div key={msg.id} className="flex items-start gap-3">
-                  <div
-                    className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white mt-0.5"
-                    style={{ backgroundColor: senderColor(msg) }}
-                  >
-                    {senderName(msg)[0]?.toUpperCase() ?? '?'}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                        {senderName(msg)}
-                      </span>
-                      {msg.sender_type === 'agent' && (
-                        <span
-                          className="text-[10px] rounded px-1"
-                          style={{ background: 'rgba(245,158,11,0.15)', color: 'rgb(var(--accent))' }}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+              {messages.map((msg, i) => {
+                const own = isOwnMessage(msg)
+                const prevMsg = messages[i - 1]
+                const sameSenderAsPrev = prevMsg &&
+                  prevMsg.sender_id === msg.sender_id &&
+                  prevMsg.sender_type === msg.sender_type
+
+                if (own) {
+                  return (
+                    <div key={msg.id} className="flex justify-end">
+                      <div className="max-w-[70%]">
+                        {!sameSenderAsPrev && (
+                          <p className="text-[10px] text-muted text-right mb-1 mr-1">
+                            You · {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
+                        <div
+                          className="rounded-2xl rounded-tr-sm px-4 py-2.5"
+                          style={{ background: 'rgba(245,158,11,0.28)', border: '1px solid rgba(245,158,11,0.55)' }}
                         >
-                          AI
-                        </span>
-                      )}
-                      <span className="text-[10px] text-muted">
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                          <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                            {msg.content}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-sm mt-0.5 whitespace-pre-wrap" style={{ color: 'var(--subtle)' }}>
-                      {msg.content}
-                    </p>
+                  )
+                }
+
+                return (
+                  <div key={msg.id} className="flex items-start gap-3">
+                    {!sameSenderAsPrev ? (
+                      <div
+                        className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white mt-0.5"
+                        style={{ backgroundColor: senderColor(msg) }}
+                      >
+                        {senderName(msg)[0]?.toUpperCase() ?? '?'}
+                      </div>
+                    ) : (
+                      <div className="w-7 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 max-w-[70%]">
+                      {!sameSenderAsPrev && (
+                        <div className="flex items-baseline gap-2 mb-1">
+                          <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {senderName(msg)}
+                          </span>
+                          {msg.sender_type === 'agent' && (
+                            <span
+                              className="text-[9px] rounded px-1 py-px font-medium"
+                              style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}
+                            >
+                              AI
+                            </span>
+                          )}
+                          <span className="text-[10px] text-muted">
+                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      )}
+                      <div
+                        className="rounded-2xl rounded-tl-sm px-4 py-2.5"
+                        style={{ background: 'rgba(30,50,90,0.90)', border: '1px solid rgba(255,255,255,0.15)' }}
+                      >
+                        <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                          {msg.content}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
               <div ref={bottomRef} />
             </div>
 
@@ -192,22 +426,61 @@ export default function Channels() {
                 borderTop: '1px solid rgba(255,255,255,0.08)',
               }}
             >
+              {/* @mention dropdown */}
+              {mentionQuery !== null && filteredMentions.length > 0 && (
+                <div
+                  className="mb-2 rounded-xl overflow-hidden shadow-2xl"
+                  style={{
+                    background: 'rgba(8,18,40,0.96)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                  }}
+                >
+                  <div className="px-3 py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Mention an agent</span>
+                  </div>
+                  {filteredMentions.map((agent, idx) => (
+                    <button
+                      key={agent.id}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
+                      style={{
+                        background: idx === mentionIndex ? 'rgba(255,255,255,0.08)' : 'transparent',
+                        color: 'var(--text-primary)',
+                      }}
+                      onMouseEnter={() => setMentionIndex(idx)}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        insertMention(agent.name)
+                      }}
+                    >
+                      <div
+                        className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
+                        style={{ backgroundColor: agent.avatar_color }}
+                      >
+                        {agent.name[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{agent.name}</p>
+                        <p className="text-[10px] text-muted">{agent.role}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div
-                className="flex items-end gap-3 rounded-xl px-3 py-2"
+                className="flex items-end gap-3 rounded-xl px-3 py-2 transition-colors focus-within:ring-1 focus-within:ring-accent/40"
                 style={{
                   background: 'rgba(8, 18, 40, 0.70)',
                   border: '1px solid rgba(255,255,255,0.12)',
                 }}
               >
                 <textarea
+                  ref={inputRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendMessage()
-                    }
-                  }}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
                   placeholder={`Message #${activeChannel.name} — use @name to mention an agent`}
                   rows={1}
                   className="flex-1 bg-transparent text-sm resize-none focus:outline-none"
@@ -237,6 +510,14 @@ function SendIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+    </svg>
+  )
+}
+
+function PeopleIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
     </svg>
   )
 }
