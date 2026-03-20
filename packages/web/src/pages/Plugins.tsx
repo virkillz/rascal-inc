@@ -147,7 +147,7 @@ export default function Plugins() {
   const unconfigured = plugins.filter(p => !p.configured && p.envVars.length > 0)
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-6 max-w-2xl mx-auto bg-gray-900/80 backdrop-blur-md mt-6 rounded-md">
       <h1 className="text-2xl font-bold mb-1">Plugins</h1>
       <p className="text-sm text-gray-400 mb-6">
         Connect external services. Plugins expose tool definitions that agents can call.

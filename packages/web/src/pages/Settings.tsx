@@ -70,7 +70,7 @@ export default function Settings() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-10">
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-10 bg-gray-900/80 backdrop-blur-md rounded-md mt-6">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Settings</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Manage providers and default AI model.</p>

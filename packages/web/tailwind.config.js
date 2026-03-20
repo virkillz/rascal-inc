@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Space Grotesk', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       colors: {
@@ -18,8 +18,8 @@ export default {
         border: 'var(--border)',
         accent: {
           DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
-          dim: '#5548cc',
-          glow: 'rgba(124, 106, 247, 0.15)',
+          dim: '#d97706',
+          glow: 'rgba(245, 158, 11, 0.15)',
         },
         muted: 'var(--muted)',
         subtle: 'var(--subtle)',

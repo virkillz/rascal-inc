@@ -39,10 +39,20 @@ export default function App() {
   if (loading) {
     return (
       <ThemeProvider>
-        <div className="flex items-center justify-center h-full bg-surface-0">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted">Loading...</span>
+        <div className="flex items-center justify-center h-full" style={{ background: 'rgb(var(--s0))' }}>
+          <div className="flex flex-col items-center gap-4">
+            <div
+              className="w-10 h-10 rounded flex items-center justify-center"
+              style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}
+            >
+              <div
+                className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin"
+                style={{ borderColor: 'rgb(var(--accent))', borderTopColor: 'transparent' }}
+              />
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
+              Initializing
+            </span>
           </div>
         </div>
       </ThemeProvider>
