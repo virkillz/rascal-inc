@@ -16,6 +16,7 @@ import SettingsSkills from './pages/settings/Skills.tsx'
 import SettingsRoles from './pages/settings/Roles.tsx'
 import SettingsAppearance from './pages/settings/Appearance.tsx'
 import SettingsCompany from './pages/settings/Company.tsx'
+import SettingsPrompt from './pages/settings/Prompt.tsx'
 import Workspace from './pages/Workspace.tsx'
 import Board from './pages/Board.tsx'
 import Channels from './pages/Channels.tsx'
@@ -127,6 +128,7 @@ export default function App() {
               <Route path="extensions" element={<SettingsExtensions />} />
               <Route path="skills" element={<SettingsSkills />} />
               <Route path="roles" element={<SettingsRoles />} />
+              <Route path="prompt" element={<SettingsPrompt />} />
               <Route path="appearance" element={<SettingsAppearance />} />
             </Route>
           </Route>

@@ -22,6 +22,7 @@ export interface Settings {
   companyName: string
   companyMission: string
   companyLogo: string
+  platformPrompt: string
   defaultModel: { provider: string; modelId: string; thinkingLevel: string }
 }
 
@@ -287,6 +288,7 @@ export interface Agent {
   avatar_color: string
   avatar_url: string
   is_active: number
+  is_default: number
   created_at: string
   updated_at: string
 }

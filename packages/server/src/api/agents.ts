@@ -13,6 +13,8 @@ export interface AgentRow {
   source: string
   avatar_color: string
   avatar_url: string
+  is_active: number
+  is_default: number
   created_at: string
   updated_at: string
 }
@@ -148,6 +150,7 @@ export function createAgentsRouter(): Router {
   router.delete('/:id', (req, res) => {
     const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRow | undefined
     if (!agent) return res.status(404).json({ error: 'Agent not found' })
+    if (agent.is_default) return res.status(403).json({ error: 'Default agents cannot be terminated' })
 
     clearSession(agent.id)
     getDb().prepare('DELETE FROM agents WHERE id = ?').run(agent.id)

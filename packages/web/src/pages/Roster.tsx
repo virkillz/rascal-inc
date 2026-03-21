@@ -1,14 +1,15 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.ts'
 import { useAppEvents } from '../hooks/useAppEvents.ts'
 import type { Agent, CreateAgentInput } from '../api.ts'
 import { api } from '../api.ts'
+import { User, Bot, X } from 'lucide-react'
 
 type HireMode = 'ai' | 'human'
 
 export default function Roster() {
-  const { agents, addAgent, deleteAgent, agentStatus, setAgentStatus } = useStore()
+  const { agents, addAgent, agentStatus, setAgentStatus } = useStore()
   const navigate = useNavigate()
 
   useAppEvents((event) => {
@@ -17,77 +18,45 @@ export default function Roster() {
     else if (event.type === 'agent:error') setAgentStatus(event.agentId, 'error')
   })
 
-  const [hireMode, setHireMode] = useState<HireMode | null>(agents.length === 0 ? 'ai' : null)
-  const [showPicker, setShowPicker] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!showPicker) return
-    function handleClick(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [showPicker])
+  const [hireMode, setHireMode] = useState<HireMode | null>(null)
+  const [showHirePicker, setShowHirePicker] = useState(agents.length === 0)
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-3xl mx-auto px-6 py-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <div>
+        <div
+          className="flex items-center justify-between mb-5 rounded-xl px-6 py-4 relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, rgba(8,18,40,0.95) 0%, rgba(20,35,70,0.95) 100%)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse at 20% 50%, rgba(var(--accent), 0.08) 0%, transparent 60%)' }}
+          />
+          <div className="relative">
             <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
               Employee Roster
             </h1>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--subtle)' }}>
               {agents.length === 0
                 ? 'No employees yet — hire your first one'
                 : `${agents.length} employee${agents.length !== 1 ? 's' : ''} on staff`}
             </p>
           </div>
           {hireMode === null && (
-            <div className="relative" ref={pickerRef}>
-              <button
-                className="btn-primary flex items-center gap-1.5"
-                onClick={() => setShowPicker((v) => !v)}
-              >
-                <span className="text-base leading-none">+</span>
-                Hire Employee
-                <span className="text-[10px] opacity-60 ml-0.5">▾</span>
-              </button>
-              {showPicker && (
-                <div
-                  className="absolute right-0 mt-1.5 z-50 rounded-lg overflow-hidden"
-                  style={{
-                    background: 'rgb(var(--s2))',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                    minWidth: '160px',
-                  }}
-                >
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors hover:bg-white/5"
-                    style={{ color: 'var(--text-primary)' }}
-                    onClick={() => { setHireMode('human'); setShowPicker(false) }}
-                  >
-                    <span className="text-base">👤</span>
-                    Hire Human
-                  </button>
-                  <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)' }} />
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors hover:bg-white/5"
-                    style={{ color: 'var(--text-primary)' }}
-                    onClick={() => { setHireMode('ai'); setShowPicker(false) }}
-                  >
-                    <span className="text-base">🤖</span>
-                    Hire AI
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              className="btn-primary relative z-10 flex items-center gap-1.5"
+              onClick={() => setShowHirePicker(true)}
+            >
+              <span className="text-base leading-none">+</span>
+              Hire Employee
+            </button>
           )}
         </div>
 
@@ -100,7 +69,6 @@ export default function Roster() {
                 agent={agent}
                 status={agentStatus[agent.id]}
                 onClick={() => navigate(`/agents/${agent.id}`)}
-                onDelete={agent.source === 'user' ? () => deleteAgent(agent.id) : undefined}
               />
             ))}
           </div>
@@ -131,19 +99,93 @@ export default function Roster() {
           </div>
         )}
       </div>
+
+      {/* Hire Picker Modal */}
+      {showHirePicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowHirePicker(false)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-2xl p-6"
+            style={{
+              background: 'linear-gradient(135deg, rgba(10,20,48,0.98) 0%, rgba(16,30,64,0.98) 100%)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+              style={{ color: 'var(--muted)' }}
+              onClick={() => setShowHirePicker(false)}
+            >
+              <X size={14} />
+            </button>
+
+            <h2 className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Who are you hiring?</h2>
+            <p className="text-xs mb-5" style={{ color: 'var(--muted)' }}>Choose the type of employee to add to your roster.</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                className="group flex flex-col items-center justify-center gap-3 rounded-xl py-7 px-4 transition-all"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                onClick={() => { setShowHirePicker(false); setHireMode('human') }}
+              >
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.3)' }}
+                >
+                  <User size={22} style={{ color: 'var(--status-blue)' }} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Human</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>Create login account</div>
+                </div>
+              </button>
+
+              <button
+                className="group flex flex-col items-center justify-center gap-3 rounded-xl py-7 px-4 transition-all"
+                style={{
+                  background: 'rgba(245,158,11,0.06)',
+                  border: '1px solid rgba(245,158,11,0.2)',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,158,11,0.12)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245,158,11,0.06)')}
+                onClick={() => { setShowHirePicker(false); setHireMode('ai') }}
+              >
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}
+                >
+                  <Bot size={22} style={{ color: 'rgb(var(--accent))' }} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>AI Agent</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>Configure new agent</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── Employee Card ────────────────────────────────────────────────────────────
 
-function EmployeeCard({ agent, status, onClick, onDelete }: {
+function EmployeeCard({ agent, status, onClick }: {
   agent: Agent
   status?: 'idle' | 'thinking' | 'error'
   onClick: () => void
-  onDelete?: () => void
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const stats = deriveStats(agent.id + agent.name)
 
   const { label: statusLabel, cls: statusCls, dotColor } = resolveStatus(agent, status)
@@ -243,42 +285,6 @@ function EmployeeCard({ agent, status, onClick, onDelete }: {
           </div>
         </div>
 
-        {/* Delete control */}
-        {onDelete && (
-          <div
-            className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {confirmDelete ? (
-              <div className="flex gap-1">
-                <button
-                  className="text-[11px] px-2 py-1 rounded font-semibold transition-colors"
-                  style={{ background: 'var(--status-red-bg)', color: 'var(--status-red)', border: '1px solid var(--status-red-border)' }}
-                  onClick={() => onDelete()}
-                >
-                  Confirm
-                </button>
-                <button
-                  className="text-[11px] px-2 py-1 rounded transition-colors"
-                  style={{ background: 'rgb(var(--s3))', color: 'var(--subtle)' }}
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                className="w-7 h-7 flex items-center justify-center rounded transition-colors text-xs"
-                style={{ background: 'rgb(var(--s3))', color: 'var(--muted)' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--status-red)' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)' }}
-                onClick={() => setConfirmDelete(true)}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )

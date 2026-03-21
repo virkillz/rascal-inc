@@ -57,6 +57,7 @@ function runMigrations(db: DB): void {
       avatar_color  TEXT NOT NULL DEFAULT '#7c6af7',
       avatar_url    TEXT NOT NULL DEFAULT '',
       is_active     INTEGER NOT NULL DEFAULT 1,
+      is_default    INTEGER NOT NULL DEFAULT 0,
       created_at    TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -237,7 +238,10 @@ function runMigrations(db: DB): void {
 
   // Additive column migrations for existing installs
   addColumnIfNotExists(db, 'agents', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
+  addColumnIfNotExists(db, 'agents', 'is_default', 'INTEGER NOT NULL DEFAULT 0')
   addColumnIfNotExists(db, 'agents', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
+  // Mark the two seed agents (Fabiana and Clive) as default on existing installs
+  db.exec(`UPDATE agents SET is_default = 1 WHERE name IN ('Fabiana', 'Clive') AND is_default = 0`)
   addColumnIfNotExists(db, 'agent_schedules', 'skip_if_no_todos', 'INTEGER NOT NULL DEFAULT 0')
   addColumnIfNotExists(db, 'users', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'users', 'bio', "TEXT NOT NULL DEFAULT ''")
@@ -352,7 +356,7 @@ You can read and modify source files to help with bug fixes, new features, and p
     for (const a of defaultAgents) {
       const agentId = randomUUID()
       db.prepare(
-        'INSERT INTO agents (id, name, role, description, system_prompt, model_config, avatar_color, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agents (id, name, role, description, system_prompt, model_config, avatar_color, avatar_url, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)',
       ).run(agentId, a.name, a.role, a.description, a.system_prompt, '{}', a.avatar_color, a.avatar_url)
 
       // Seed group chat monitoring schedule for each default agent
@@ -532,6 +536,21 @@ export function getAgentRoles(agentId: string): RoleRow[] {
       WHERE ar.agent_id = ?
     `)
     .all(agentId) as unknown as RoleRow[]
+}
+
+export function getAllAgents(): { id: string; name: string; role: string }[] {
+  return getDb()
+    .prepare('SELECT id, name, role FROM agents ORDER BY name ASC')
+    .all() as { id: string; name: string; role: string }[]
+}
+
+export function getBoardLanes(): { id: string; name: string; type: string }[] {
+  const db = getDb()
+  const board = db.prepare('SELECT id FROM boards ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined
+  if (!board) return []
+  return db
+    .prepare('SELECT id, name, lane_type AS type FROM lanes WHERE board_id = ? ORDER BY position ASC')
+    .all(board.id) as { id: string; name: string; type: string }[]
 }
 
 export function getPublicChannelId(): string {

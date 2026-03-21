@@ -11,7 +11,7 @@ import {
 import path from 'path'
 import fs from 'fs'
 import chalk from 'chalk'
-import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting } from './db.js'
+import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting, getAllAgents, getBoardLanes } from './db.js'
 import { eventBus } from './event-bus.js'
 import { buildAgentTools } from './platform-tools.js'
 import { pluginLoader } from './plugin-loader.js'
@@ -138,6 +138,17 @@ export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): str
     ? `## Your Open Todos\n${todos.map((t) => `[${t.id}] ${t.text}`).join('\n')}`
     : ''
 
+  // ── Static context: agents + lanes ───────────────────────────────────────
+  const allAgents = getAllAgents()
+  const agentsBlock = allAgents.length
+    ? `## Team Members\n${allAgents.map((a) => `- ${a.name} (id: ${a.id}) — ${a.role}`).join('\n')}`
+    : ''
+
+  const lanes = getBoardLanes()
+  const lanesBlock = lanes.length
+    ? `## Board Lanes\n${lanes.map((l) => `- ${l.name} (id: ${l.id}, type: ${l.type})`).join('\n')}`
+    : ''
+
   // ── Plugin tools for this agent ─────────────────────────────────────────
   let pluginToolsLines = ''
   try {
@@ -154,23 +165,28 @@ export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): str
   }
 
   const toolsBlock =
-    `## Platform Tools\n` +
-    `Your workspace is at: ${workspaceDir}\n` +
-    `You have access to the following platform tools in addition to the built-in read/write/edit/bash tools:\n` +
-    `- workspace_read / workspace_write — read and write files in your workspace\n` +
-    `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +
-    `- todo_add / todo_complete — manage your task list (shown in your system prompt)\n` +
-    `- board_list_agents — list all agents (id, name, role); use this to look up a teammate's ID before assigning a card\n` +
-    `- board_list_lanes — list all available lanes (id, name, type, description); no parameters needed\n` +
+    `## How You Work\n\n` +
+    `As a virtual employee, here is how you operate.\n\n` +
+    `### Tasks\n` +
+    `All tasks in this organization are managed via a kanban board with cards. Use these tools to manage your work:\n` +
     `- board_list_my_cards — list cards assigned to you; optionally filter by laneType (todo/in_progress/done)\n` +
     `- board_create_card — create a card (auto-placed in Todo lane); use board_list_agents to get the assigneeId\n` +
     `- board_update_card — update a card's title, description, result, or assignee by cardId\n` +
     `- board_move_card — move a card to a different lane by cardId and laneId\n` +
-    `Use memory_add proactively whenever you learn something worth remembering across conversations.\n` +
-    `Use todo_add to track multi-step work you intend to continue.` +
+    `- board_list_agents — refresh the agent list mid-session if needed (pre-loaded in ## Team Members above)\n` +
+    `- board_list_lanes — refresh the lane list mid-session if needed (pre-loaded in ## Board Lanes above)\n\n` +
+    `### Deliverables\n` +
+    `When asked to do something, write your output into a file inside your workspace directory: ${workspaceDir}\n` +
+    `Prioritize dedicated workspace tools, but you can also use the built-in read/write/edit/bash tools.\n` +
+    `- workspace_read / workspace_write — read and write files in your workspace\n` +
+    `When you complete a task, update the card's result with what you did and include a link to the file you created or updated.\n\n` +
+    `### Personal Notes\n` +
+    `To be a good employee, you must remember things. Whenever you learn something worth remembering — especially related to work — write it to memory. If your task requires multi-step work you intend to continue, use your todo list.\n` +
+    `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +
+    `- todo_add / todo_complete — manage your task list (shown in your system prompt)` +
     pluginToolsLines
 
-  return [platformPrompt, sopBlock, roleBlock, identityBlock, toolsBlock, memoryBlock, todoBlock]
+  return [identityBlock, platformPrompt, roleBlock, sopBlock, toolsBlock, agentsBlock, lanesBlock, memoryBlock, todoBlock]
     .filter(Boolean)
     .join('\n\n')
 }
