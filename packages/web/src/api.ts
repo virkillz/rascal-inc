@@ -307,6 +307,8 @@ export interface CreateAgentInput {
   description?: string
   systemPrompt?: string
   modelConfig?: { provider?: string; modelId?: string; thinkingLevel?: string }
+  avatarUrl?: string
+  avatarColor?: string
 }
 
 export interface ChatMessage {

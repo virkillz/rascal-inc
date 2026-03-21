@@ -91,13 +91,14 @@ export function createAgentsRouter(): Router {
     const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRow | undefined
     if (!agent) return res.status(404).json({ error: 'Agent not found' })
 
-    const { name, role, description, systemPrompt, modelConfig, avatarColor } = req.body as {
+    const { name, role, description, systemPrompt, modelConfig, avatarColor, avatarUrl } = req.body as {
       name?: string
       role?: string
       description?: string
       systemPrompt?: string
       modelConfig?: object
       avatarColor?: string
+      avatarUrl?: string
     }
 
     getDb().prepare(`
@@ -108,6 +109,7 @@ export function createAgentsRouter(): Router {
         system_prompt = ?,
         model_config = ?,
         avatar_color = ?,
+        avatar_url = ?,
         updated_at = datetime('now')
       WHERE id = ?
     `).run(
@@ -117,6 +119,7 @@ export function createAgentsRouter(): Router {
       systemPrompt?.trim() ?? agent.system_prompt,
       JSON.stringify(modelConfig ?? JSON.parse(agent.model_config)),
       avatarColor ?? agent.avatar_color,
+      avatarUrl !== undefined ? avatarUrl : agent.avatar_url,
       agent.id,
     )
 

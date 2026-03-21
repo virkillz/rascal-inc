@@ -275,14 +275,6 @@ function seedInitialData(db: DB): void {
     publicChannel = { id: channelId }
   }
 
-  // Ensure Fabiana and Clive are members of the public channel
-  const defaultAgents = db.prepare("SELECT id FROM agents WHERE name IN ('Fabiana', 'Clive')").all() as { id: string }[]
-  for (const agent of defaultAgents) {
-    db.prepare(
-      "INSERT OR IGNORE INTO channel_members (channel_id, member_id, member_type) VALUES (?, ?, 'agent')"
-    ).run(publicChannel.id, agent.id)
-  }
-
   // Seed default board if none exist
   const boardCount = (db.prepare('SELECT COUNT(*) as c FROM boards').get() as { c: number }).c
   if (boardCount === 0) {
@@ -378,6 +370,14 @@ You can read and modify source files to help with bug fixes, new features, and p
         'Public channel monitoring',
       )
     }
+  }
+
+  // Ensure all default agents are members of the public channel (must run after agent seeding)
+  const defaultAgents = db.prepare("SELECT id FROM agents WHERE name IN ('Fabiana', 'Clive')").all() as { id: string }[]
+  for (const agent of defaultAgents) {
+    db.prepare(
+      "INSERT OR IGNORE INTO channel_members (channel_id, member_id, member_type) VALUES (?, ?, 'agent')"
+    ).run(publicChannel.id, agent.id)
   }
 }
 

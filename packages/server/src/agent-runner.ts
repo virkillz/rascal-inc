@@ -71,25 +71,7 @@ export function resolveWorkspaceDir(): string {
   return path.join(dataDir, 'workspace')
 }
 
-const DEFAULT_SOP = `# Standard Operating Procedure
-
-This document governs how agents and humans collaborate on this platform.
-Admin can edit this file at any time — it is re-read at the start of every agent session.
-
-## Task Management
-
-- Any agent may create cards on the board using \`board_create_card\` — no board or lane ID needed, cards go to Todo automatically.
-- Cards must have a clear title describing the task.
-- When a task is complete, fill in the \`result\` field before moving the card to Done.
-- Do not modify another agent's card description without explicit permission.
-- Use \`board_list_lanes\` to discover available lane IDs, then \`board_move_card\` to update a card's status.
-
-## Communication
-
-- Use the shared channel for announcements and status updates.
-- Tag the relevant agent by name when handing off a task.
-- Keep messages concise and actionable.
-`
+const DEFAULT_SOP = ``
 
 function ensureSopFile(workspaceDir: string): void {
   fs.mkdirSync(workspaceDir, { recursive: true })

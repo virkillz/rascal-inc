@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.ts'
 import { api, type ChatMessage } from '../api.ts'
+import AgentDetailModal from '../components/AgentDetailModal.tsx'
 
 export default function AgentChat() {
   const { id } = useParams<{ id: string }>()
@@ -13,6 +14,7 @@ export default function AgentChat() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [showDetail, setShowDetail] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -86,6 +88,7 @@ export default function AgentChat() {
 
   return (
     <div className="flex h-full">
+      {showDetail && <AgentDetailModal agent={agent} onClose={() => setShowDetail(false)} />}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <div
@@ -97,7 +100,7 @@ export default function AgentChat() {
             borderBottom: '1px solid rgba(255,255,255,0.08)',
           }}
         >
-          <div className="relative flex-shrink-0">
+          <div className="relative flex-shrink-0 cursor-pointer" onClick={() => setShowDetail(true)}>
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold overflow-hidden"
               style={{
@@ -124,7 +127,11 @@ export default function AgentChat() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              <div
+                className="text-sm font-semibold cursor-pointer hover:underline"
+                style={{ color: 'var(--text-primary)' }}
+                onClick={() => setShowDetail(true)}
+              >
                 {agent.name}
               </div>
               {!agent.is_active && (
