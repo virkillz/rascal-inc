@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, type Channel, type ChannelMessage, type Agent, type User } from '../api.ts'
 import { useStore } from '../store.ts'
+import { useAppEvents } from '../hooks/useAppEvents.ts'
 
 // ─── Message menu ─────────────────────────────────────────────────────────────
 
@@ -107,37 +108,30 @@ export default function Channels() {
   }, [showMembers])
 
   // Subscribe to WS channel:message events
-  useEffect(() => {
-    function handler(event: MessageEvent) {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'channel:message' && data.channelId === activeChannel?.id) {
-          const incoming: ChannelMessage = {
-            id: data.messageId,
-            channel_id: data.channelId,
-            sender_id: data.senderId,
-            sender_type: data.senderType,
-            content: data.content,
-            created_at: new Date().toISOString(),
-          }
-          setMessages((prev) => {
-            // Replace optimistic message from current user if content matches
-            const optimisticIdx = prev.findIndex(
-              (m) => m.id > 1_000_000_000_000 && m.sender_id === data.senderId && m.content === data.content
-            )
-            if (optimisticIdx !== -1) {
-              const next = [...prev]
-              next[optimisticIdx] = incoming
-              return next
-            }
-            return [...prev, incoming]
-          })
+  useAppEvents((event) => {
+    if (event.type === 'channel:message' && event.channelId === activeChannel?.id) {
+      const incoming: ChannelMessage = {
+        id: event.messageId,
+        channel_id: event.channelId,
+        sender_id: event.senderId,
+        sender_type: event.senderType as 'agent' | 'user',
+        content: event.content,
+        created_at: new Date().toISOString(),
+      }
+      setMessages((prev) => {
+        // Replace optimistic message from current user if content matches
+        const optimisticIdx = prev.findIndex(
+          (m) => m.id > 1_000_000_000_000 && m.sender_id === event.senderId && m.content === event.content
+        )
+        if (optimisticIdx !== -1) {
+          const next = [...prev]
+          next[optimisticIdx] = incoming
+          return next
         }
-      } catch { /* ignore */ }
+        return [...prev, incoming]
+      })
     }
-    window.addEventListener('ws:message', handler as EventListener)
-    return () => window.removeEventListener('ws:message', handler as EventListener)
-  }, [activeChannel])
+  })
 
   async function loadChannels() {
     const list = await api.channels.list()

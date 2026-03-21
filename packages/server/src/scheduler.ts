@@ -1,6 +1,7 @@
 import { CronExpressionParser } from 'cron-parser'
+import chalk from 'chalk'
 import { getDb, getSetting, getAgentTodos, getPublicChannelId, getRecentChannelMessages, type ScheduleRow } from './db.js'
-import { chatWithAgent, type AgentRecord, type ModelConfig } from './agent-runner.js'
+import { chatWithAgent, isDebugMode, type AgentRecord, type ModelConfig } from './agent-runner.js'
 import { eventBus } from './event-bus.js'
 
 function computeNextRun(cron: string): string {
@@ -17,7 +18,7 @@ function getDefaultModel(): ModelConfig {
   return { provider: 'openrouter', modelId: 'moonshotai/kimi-k2.5', thinkingLevel: 'low' }
 }
 
-function buildSchedulerPrompt(schedule: ScheduleRow, agentName: string): string {
+function buildSchedulerPrompt(schedule: ScheduleRow, _agentName: string): string {
   // Include recent #public channel history so the agent has company context
   let channelContext = ''
   try {
@@ -92,6 +93,12 @@ export function startScheduler(): void {
       eventBus.emit({ type: 'schedule:fired', agentId: s.agent_id, scheduleId: s.id, label: s.label })
 
       const triggerMsg = buildSchedulerPrompt(s, agent.name)
+
+      if (isDebugMode()) {
+        const label = s.label || s.cron
+        console.log(chalk.cyan(`[debug][scheduler]`), chalk.bold('⏰ fired'), `"${label}"`, chalk.dim(`→ agent: ${agent.name}`))
+        console.log(chalk.cyan(`[debug][scheduler]`), chalk.dim('prompt:\n') + triggerMsg)
+      }
 
       chatWithAgent(agent, triggerMsg, getDefaultModel())
         .catch(console.error)

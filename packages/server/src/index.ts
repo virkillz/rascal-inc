@@ -4,7 +4,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import chalk from 'chalk'
 import { initDb } from './db.js'
-import { setDataDir } from './agent-runner.js'
+import { setDataDir, setDebugMode } from './agent-runner.js'
 import { setEnvFilePath } from './api/settings.js'
 import { setPluginsEnvFilePath, seedBuiltInPlugins } from './api/plugins.js'
 import { pluginLoader } from './plugin-loader.js'
@@ -19,6 +19,9 @@ const PORT = parseInt(process.env.PORT ?? '3000', 10)
 // Company directory: where rascal was started from (or explicit --dir flag)
 const dirFlag = process.argv.indexOf('--dir')
 const companyDir = dirFlag !== -1 ? path.resolve(process.argv[dirFlag + 1]) : process.cwd()
+
+const debugFlag = process.argv.includes('--debug')
+if (debugFlag) setDebugMode(true)
 
 const DATA_DIR = path.join(companyDir, 'data')
 const WORKSPACE_DIR = path.join(companyDir, 'workspace')
@@ -99,6 +102,9 @@ async function cmdStart() {
   console.log(chalk.dim(`  data         ${DATA_DIR}`))
   if (!webDistDir) {
     console.log(chalk.dim(`  web          http://localhost:5173 ${chalk.yellow('(run web dev server separately)')}`))
+  }
+  if (debugFlag) {
+    console.log(chalk.cyan(`  debug        ON — agent events, tool calls, and scheduler fires will be logged`))
   }
   console.log('')
   console.log(chalk.bold.green(`  Open http://localhost:${PORT} in your browser\n`))

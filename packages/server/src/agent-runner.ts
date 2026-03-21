@@ -10,9 +10,26 @@ import {
 } from '@mariozechner/pi-coding-agent'
 import path from 'path'
 import fs from 'fs'
+import chalk from 'chalk'
 import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting } from './db.js'
 import { eventBus } from './event-bus.js'
 import { buildAgentTools } from './platform-tools.js'
+
+let debugMode = false
+
+export function setDebugMode(enabled: boolean): void {
+  debugMode = enabled
+}
+
+export function isDebugMode(): boolean {
+  return debugMode
+}
+
+function dbg(agentName: string, ...args: unknown[]): void {
+  if (!debugMode) return
+  const prefix = chalk.cyan(`[debug][${agentName}]`)
+  console.log(prefix, ...args)
+}
 
 export interface ModelConfig {
   provider: string
@@ -161,6 +178,10 @@ async function createLiveSession(
   const workspaceDir = resolveWorkspaceDir()
   ensureSopFile(workspaceDir)
   const systemPrompt = buildSystemPrompt(agent, workspaceDir)
+  if (debugMode) {
+    dbg(agent.name, chalk.bold('── NEW SESSION ──'))
+    dbg(agent.name, chalk.dim('system prompt:\n') + systemPrompt)
+  }
   const sessionsDir = path.join(dataDir, 'sessions', agent.id)
 
   // Build platform tools from the agent's declared tool list
@@ -201,9 +222,60 @@ async function createLiveSession(
 
   const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
     const p = pending.get(agent.id)
+
+    // Debug logging for all notable events
+    if (debugMode) {
+      switch (event.type) {
+        case 'agent_start':
+          dbg(agent.name, chalk.bold('▶ agent_start'))
+          break
+        case 'agent_end':
+          dbg(agent.name, chalk.bold('■ agent_end'), `(${event.messages?.length ?? 0} messages)`)
+          break
+        case 'turn_start':
+          dbg(agent.name, chalk.dim('↻ turn_start'))
+          break
+        case 'turn_end':
+          dbg(agent.name, chalk.dim('↺ turn_end'))
+          break
+        case 'message_start':
+          dbg(agent.name, chalk.yellow('◆ message_start'), event.message?.role ?? '')
+          break
+        case 'message_end':
+          dbg(agent.name, chalk.yellow('◇ message_end'), event.message?.role ?? '')
+          break
+        case 'tool_execution_start': {
+          const argsStr = JSON.stringify(event.args ?? {})
+          dbg(agent.name, chalk.magenta('⚡ tool_call'), chalk.bold(event.toolName), argsStr.length > 300 ? argsStr.slice(0, 300) + '…' : argsStr)
+          break
+        }
+        case 'tool_execution_end': {
+          const resultStr = JSON.stringify(event.result ?? '')
+          const status = event.isError ? chalk.red('ERROR') : chalk.green('OK')
+          dbg(agent.name, chalk.magenta('⚡ tool_result'), chalk.bold(event.toolName), status, resultStr.length > 300 ? resultStr.slice(0, 300) + '…' : resultStr)
+          break
+        }
+        case 'auto_compaction_start':
+          dbg(agent.name, chalk.blue('⚙ compaction_start'), event.reason)
+          break
+        case 'auto_compaction_end':
+          dbg(agent.name, chalk.blue('⚙ compaction_end'), event.aborted ? 'aborted' : 'done', event.errorMessage ?? '')
+          break
+        case 'auto_retry_start':
+          dbg(agent.name, chalk.red('↺ retry'), `attempt ${event.attempt}/${event.maxAttempts}`, event.errorMessage)
+          break
+        case 'auto_retry_end':
+          dbg(agent.name, chalk.red('↺ retry_end'), event.success ? chalk.green('success') : chalk.red('failed'), event.finalError ?? '')
+          break
+      }
+    }
+
     if (!p) return
     if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
       const delta = event.assistantMessageEvent.delta
+      if (debugMode) {
+        process.stdout.write(chalk.cyan(`[debug][${agent.name}] `) + chalk.dim('text: ') + delta)
+      }
       p.chunks.push(delta)
       if (p.chunks.length === 1) {
         eventBus.emit({ type: 'agent:reply', agentId: agent.id, preview: delta.slice(0, 80) })
@@ -230,6 +302,10 @@ export async function chatWithAgent(
   const live = liveSessions.get(agent.id)!
 
   eventBus.emit({ type: 'agent:thinking', agentId: agent.id })
+
+  if (debugMode) {
+    dbg(agent.name, chalk.green('→ sending:'), message.length > 500 ? message.slice(0, 500) + '…' : message)
+  }
 
   return new Promise((resolve, reject) => {
     pending.set(agent.id, { chunks: [], resolve })
