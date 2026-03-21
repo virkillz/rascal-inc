@@ -128,7 +128,7 @@ export function ScheduleSection({ agentId }: { agentId: string }) {
   return (
     <>
     <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
-      <div className="w-full max-w-2xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+      <div className="w-full max-w-2xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-xs text-muted">Recurring tasks that run automatically on a schedule.</p>
           <button
@@ -368,7 +368,7 @@ export function ScheduleSection({ agentId }: { agentId: string }) {
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ background: 'rgba(0,0,0,0.7)' }}
-        onClick={() => { setPreviewSchedule(null); setPreviewCombinedPrompt(null) }}
+        onClick={(e) => { e.stopPropagation(); setPreviewSchedule(null); setPreviewCombinedPrompt(null) }}
       >
         <div
           className="w-full max-w-lg rounded-2xl p-6 shadow-2xl"
@@ -410,7 +410,7 @@ export function ScheduleSection({ agentId }: { agentId: string }) {
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ background: 'rgba(0,0,0,0.7)' }}
-        onClick={() => setDeleteConfirmId(null)}
+        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null) }}
       >
         <div
           className="w-full max-w-sm rounded-2xl p-6 shadow-2xl"

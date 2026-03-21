@@ -34,7 +34,7 @@ export function MemorySection({ agentId }: { agentId: string }) {
 
   return (
     <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
-      <div className="w-full max-w-xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+      <div className="w-full max-w-xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in" onClick={(e) => e.stopPropagation()}>
         <p className="text-xs text-muted mb-4">
           Memory entries are injected into this agent's system prompt and persist across sessions.
         </p>

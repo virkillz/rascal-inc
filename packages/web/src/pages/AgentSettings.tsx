@@ -6,26 +6,20 @@ import { ChevronLeftIcon } from '../components/agent-settings/icons.tsx'
 import { ProfileSection } from '../components/agent-settings/ProfileSection.tsx'
 import { AvatarSection } from '../components/agent-settings/AvatarSection.tsx'
 import { ModelSection } from '../components/agent-settings/ModelSection.tsx'
-import { MemorySection } from '../components/agent-settings/MemorySection.tsx'
-import { TodosSection } from '../components/agent-settings/TodosSection.tsx'
 import { SkillsSection } from '../components/agent-settings/SkillsSection.tsx'
 import { PluginsSection } from '../components/agent-settings/PluginsSection.tsx'
-import { ScheduleSection } from '../components/agent-settings/ScheduleSection.tsx'
 import { PromptSection } from '../components/agent-settings/PromptSection.tsx'
 import { TerminateSection } from '../components/agent-settings/TerminateSection.tsx'
 import { SessionsSection } from '../components/agent-settings/SessionsSection.tsx'
 
-type Section = 'profile' | 'avatar' | 'model' | 'memory' | 'todos' | 'skills' | 'plugins' | 'schedule' | 'prompt' | 'sessions' | 'terminate'
+type Section = 'profile' | 'avatar' | 'model' | 'skills' | 'plugins' | 'prompt' | 'sessions' | 'terminate'
 
 const NAV_ITEMS: { id: Section; label: string; danger?: boolean }[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'avatar', label: 'Avatar' },
   { id: 'model', label: 'Model' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'todos', label: 'Todos' },
   { id: 'skills', label: 'Skills' },
   { id: 'plugins', label: 'Plugins' },
-  { id: 'schedule', label: 'Schedule' },
   { id: 'prompt', label: 'System Prompt' },
   { id: 'sessions', label: 'Sessions' },
   { id: 'terminate', label: 'Terminate', danger: true },
@@ -170,11 +164,8 @@ export default function AgentSettings() {
         {section === 'profile' && <ProfileSection agent={agent} onSave={handleSave} />}
         {section === 'avatar' && <AvatarSection agent={agent} onSave={handleSave} />}
         {section === 'model' && <ModelSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
-        {section === 'memory' && id && <MemorySection agentId={id} />}
-        {section === 'todos' && id && <TodosSection agentId={id} />}
         {section === 'skills' && <SkillsSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
         {section === 'plugins' && <PluginsSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
-        {section === 'schedule' && id && <ScheduleSection agentId={id} />}
         {section === 'prompt' && id && <PromptSection agentId={id} />}
         {section === 'sessions' && id && <SessionsSection agentId={id} />}
         {section === 'terminate' && id && <TerminateSection agent={agent} agentId={id} />}

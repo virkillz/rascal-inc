@@ -129,7 +129,7 @@ function EventRow({ event }: { event: SessionEvent }) {
                 return (
                   <div key={i} className="text-xs font-mono px-2 py-1.5 rounded" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', color: 'var(--subtle)' }}>
                     <span style={{ color: '#fcd34d' }}>{part.toolName}</span>
-                    {part.input && <span style={{ color: 'var(--muted)' }}> {JSON.stringify(part.input).slice(0, 120)}</span>}
+                    {part.input != null && <span style={{ color: 'var(--muted)' }}> {JSON.stringify(part.input).slice(0, 120)}</span>}
                   </div>
                 )
               }
@@ -179,7 +179,7 @@ export function SessionsSection({ agentId }: { agentId: string }) {
       {/* File list sidebar */}
       <aside
         className="w-56 flex-shrink-0 overflow-y-auto py-2"
-        style={{ borderRight: '1px solid rgba(255,255,255,0.07)', background: 'rgba(8,18,40,0.5)' }}
+        style={{ borderRight: '1px solid rgba(255,255,255,0.07)', background: 'rgba(8,18,40,0.6)' }}
       >
         <div className="px-3 mb-2">
           <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">Sessions</p>
@@ -206,7 +206,7 @@ export function SessionsSection({ agentId }: { agentId: string }) {
       </aside>
 
       {/* Event viewer */}
-      <div className="flex-1 overflow-y-auto py-6 px-6" style={{ background: 'rgba(4,10,24,0.60)' }}>
+      <div className="flex-1 overflow-y-auto py-6 px-6" style={{ background: 'rgba(4,10,24,0.90)' }}>
         {loading && (
           <div className="flex items-center justify-center h-full">
             <span className="text-xs text-muted animate-pulse">Loading session…</span>

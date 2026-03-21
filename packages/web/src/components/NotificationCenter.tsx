@@ -5,7 +5,7 @@ import { useStore } from '../store.ts'
 interface Notification {
   id: string
   message: string
-  type: 'agent' | 'board' | 'schedule' | 'error'
+  type: 'agent' | 'board' | 'schedule' | 'error' | 'dm'
   at: Date
 }
 
@@ -36,6 +36,8 @@ export default function NotificationCenter() {
       push({ message: `${agentName(event.agentId)} created schedule: ${event.label || 'unnamed'}`, type: 'schedule' })
     } else if (event.type === 'board:card_moved') {
       push({ message: `Card moved: "${event.title}"`, type: 'board' })
+    } else if (event.type === 'chat:message') {
+      push({ message: `${event.agentName}: ${event.content}`, type: 'dm' })
     }
   })
 

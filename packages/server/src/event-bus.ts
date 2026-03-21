@@ -22,6 +22,8 @@ export type AppEvent =
   | { type: 'board:card_moved'; cardId: string; boardId: string; laneId: string; title: string }
   // ── Channel events ────────────────────────────────────────────────────────────
   | { type: 'channel:message'; channelId: string; senderId: string; senderType: string; senderName: string; content: string; messageId: number }
+  // ── Chat events ───────────────────────────────────────────────────────────────
+  | { type: 'chat:message'; agentId: string; agentName: string; role: 'assistant'; content: string; messageId: number }
 
 type Handler = (event: AppEvent) => void
 

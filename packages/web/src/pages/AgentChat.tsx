@@ -3,6 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.ts'
 import { api, type ChatMessage } from '../api.ts'
 import AgentDetailModal from '../components/AgentDetailModal.tsx'
+import { useAppEvents } from '../hooks/useAppEvents.ts'
+import { MemorySection } from '../components/agent-settings/MemorySection.tsx'
+import { TodosSection } from '../components/agent-settings/TodosSection.tsx'
+import { ScheduleSection } from '../components/agent-settings/ScheduleSection.tsx'
 
 export default function AgentChat() {
   const { id } = useParams<{ id: string }>()
@@ -15,6 +19,7 @@ export default function AgentChat() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [showDetail, setShowDetail] = useState(false)
+  const [activeModal, setActiveModal] = useState<'memory' | 'todos' | 'schedule' | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -26,6 +31,19 @@ export default function AgentChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
+
+  useAppEvents((event) => {
+    if (event.type === 'chat:message' && event.agentId === id) {
+      const msg: ChatMessage = {
+        id: event.messageId,
+        agent_id: event.agentId,
+        role: event.role,
+        content: event.content,
+        created_at: new Date().toISOString(),
+      }
+      setMessages((prev) => [...prev, msg])
+    }
+  })
 
   if (!agent) {
     return (
@@ -89,6 +107,37 @@ export default function AgentChat() {
   return (
     <div className="flex h-full">
       {showDetail && <AgentDetailModal agent={agent} onClose={() => setShowDetail(false)} />}
+      {activeModal && id && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={() => setActiveModal(null)}
+        >
+          <div
+            className="flex items-center justify-between px-6 py-3 flex-shrink-0"
+            style={{
+              background: 'rgba(8,18,40,0.95)',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {activeModal === 'memory' ? 'Memory' : activeModal === 'todos' ? 'Todos' : 'Schedule'}
+            </span>
+            <button
+              className="p-1.5 rounded hover:bg-white/[0.07] text-muted hover:text-subtle transition-colors"
+              onClick={() => setActiveModal(null)}
+            >
+              <CloseIcon />
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden flex flex-col" onClick={() => setActiveModal(null)}>
+            {activeModal === 'memory' && <MemorySection agentId={id} />}
+            {activeModal === 'todos' && <TodosSection agentId={id} />}
+            {activeModal === 'schedule' && <ScheduleSection agentId={id} />}
+          </div>
+        </div>
+      )}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <div
@@ -154,6 +203,28 @@ export default function AgentChat() {
 
           <button
             className="p-2 rounded-lg hover:bg-white/[0.07] text-muted hover:text-subtle transition-colors"
+            onClick={() => setActiveModal('memory')}
+            title="Memory"
+          >
+            <MemoryIcon />
+          </button>
+          <button
+            className="p-2 rounded-lg hover:bg-white/[0.07] text-muted hover:text-subtle transition-colors"
+            onClick={() => setActiveModal('todos')}
+            title="Todos"
+          >
+            <TodoIcon />
+          </button>
+          <button
+            className="p-2 rounded-lg hover:bg-white/[0.07] text-muted hover:text-subtle transition-colors"
+            onClick={() => setActiveModal('schedule')}
+            title="Schedule"
+          >
+            <ScheduleIcon />
+          </button>
+
+          <button
+            className="p-2 rounded-lg hover:bg-white/[0.07] text-muted hover:text-subtle transition-colors"
             onClick={() => navigate(`/agents/${id}/settings`)}
             title="Agent settings"
           >
@@ -164,7 +235,7 @@ export default function AgentChat() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {messages.length === 0 && !sending && (
-            <div className="flex flex-col items-center justify-center h-full text-center py-16 bg-gray-900/80 backdrop-blur-md rounded-md">
+            <div className="flex flex-col items-center justify-center text-center py-16 bg-gray-900/80 backdrop-blur-md rounded-md max-w-lg mx-auto">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold mb-4 overflow-hidden"
                 style={{
@@ -548,6 +619,38 @@ function TrashIcon() {
         strokeLinejoin="round"
         d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
       />
+    </svg>
+  )
+}
+
+function MemoryIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    </svg>
+  )
+}
+
+function TodoIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    </svg>
+  )
+}
+
+function ScheduleIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   )
 }
