@@ -164,6 +164,7 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
           {/* Main Navigation */}
           <nav className="flex-1 py-3 overflow-y-auto">
             <div className="px-3 space-y-0.5">
+              <GameNavLink to="/dashboard" icon={<DashboardIcon />} label="Dashboard" />
               <GameNavLink to="/channels" icon={<MessagesIcon />} label="Messages" />
               <GameNavLink to="/board" icon={<TasksIcon />} label="Tasks" />
               <GameNavLink to="/roster" icon={<EmployeesIcon />} label="Employees" />
@@ -195,18 +196,23 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
                         opacity: !agent.is_active && !isActive ? 0.5 : 1,
                       })}
                     >
-                      <div
-                        className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-white relative overflow-hidden"
-                        style={{ backgroundColor: agent.avatar_color }}
-                      >
-                        {agent.avatar_url
-                          ? <img src={agent.avatar_url} alt={agent.name} className="w-full h-full object-cover" />
-                          : agent.name[0].toUpperCase()
-                        }
-                        {agentStatus[agent.id] === 'thinking' && (
+                      <div className="relative flex-shrink-0">
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white overflow-hidden"
+                          style={{ backgroundColor: agent.avatar_color }}
+                        >
+                          {agent.avatar_url
+                            ? <img src={agent.avatar_url} alt={agent.name} className="w-full h-full object-cover" />
+                            : agent.name[0].toUpperCase()
+                          }
+                        </div>
+                        {agent.is_active && (
                           <span
-                            className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full animate-pulse-dot"
-                            style={{ background: 'var(--status-green)', border: '1.5px solid rgb(var(--s1))' }}
+                            className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ${agentStatus[agent.id] === 'thinking' ? 'animate-pulse-dot' : ''}`}
+                            style={{
+                              background: agentStatus[agent.id] === 'thinking' ? 'var(--status-amber)' : 'var(--status-green)',
+                              border: '1.5px solid rgb(var(--s1))',
+                            }}
                           />
                         )}
                       </div>
@@ -352,6 +358,14 @@ function HudStat({ icon, label, value, highlight }: {
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
+
+function DashboardIcon() {
+  return (
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+    </svg>
+  )
+}
 
 function MessagesIcon() {
   return (

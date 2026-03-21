@@ -6,7 +6,7 @@ import { api, type ChatMessage } from '../api.ts'
 export default function AgentChat() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { agents } = useStore()
+  const { agents, agentStatus } = useStore()
   const agent = agents.find((a) => a.id === id)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -97,18 +97,29 @@ export default function AgentChat() {
             borderBottom: '1px solid rgba(255,255,255,0.08)',
           }}
         >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
-            style={{
-              backgroundColor: agent.avatar_color + '33',
-              border: `1px solid ${agent.avatar_color}66`,
-              color: agent.avatar_color,
-            }}
-          >
-            {agent.avatar_url ? (
-              <img src={agent.avatar_url} alt={agent.name} className="w-full h-full object-cover" />
-            ) : (
-              agent.name[0].toUpperCase()
+          <div className="relative flex-shrink-0">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold overflow-hidden"
+              style={{
+                backgroundColor: agent.avatar_color + '33',
+                border: `1px solid ${agent.avatar_color}66`,
+                color: agent.avatar_color,
+              }}
+            >
+              {agent.avatar_url ? (
+                <img src={agent.avatar_url} alt={agent.name} className="w-full h-full object-cover" />
+              ) : (
+                agent.name[0].toUpperCase()
+              )}
+            </div>
+            {agent.is_active && (
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${agentStatus[agent.id] === 'thinking' ? 'animate-pulse' : ''}`}
+                style={{
+                  background: agentStatus[agent.id] === 'thinking' ? 'var(--status-amber)' : 'var(--status-green)',
+                  border: '1.5px solid rgb(var(--s1))',
+                }}
+              />
             )}
           </div>
           <div className="flex-1 min-w-0">

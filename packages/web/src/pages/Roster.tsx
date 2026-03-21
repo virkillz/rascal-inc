@@ -518,7 +518,7 @@ function resolveStatus(agent: Agent, status?: string) {
   if (!agent.is_active) return { label: 'Offline', cls: 'badge-offline', dotColor: 'var(--status-gray)' }
   if (status === 'thinking') return { label: 'Working', cls: 'badge-working', dotColor: 'var(--status-amber)' }
   if (status === 'error') return { label: 'Error', cls: 'badge-error', dotColor: 'var(--status-red)' }
-  return { label: 'Active', cls: 'badge-active', dotColor: 'var(--status-green)' }
+  return { label: 'Online', cls: 'badge-active', dotColor: 'var(--status-green)' }
 }
 
 function hashInt(str: string, salt: number): number {

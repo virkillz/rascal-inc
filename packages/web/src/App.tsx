@@ -19,6 +19,7 @@ import SettingsCompany from './pages/settings/Company.tsx'
 import Workspace from './pages/Workspace.tsx'
 import Board from './pages/Board.tsx'
 import Channels from './pages/Channels.tsx'
+import Dashboard from './pages/Dashboard.tsx'
 import Layout from './components/Layout.tsx'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
@@ -109,7 +110,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route element={<Layout currentUser={currentUser} onLogout={() => { setCurrentUser(null); setAuthState('unauthenticated') }} />}>
-            <Route index element={<Navigate to="/channels" replace />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/channels" element={<Channels />} />
             <Route path="/channels/:id" element={<Channels />} />
             <Route path="/board" element={<Board />} />

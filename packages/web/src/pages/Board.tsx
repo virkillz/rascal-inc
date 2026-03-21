@@ -19,6 +19,21 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function avatar(name: string, color: string, url?: string, size = 24) {
+  const s = `${size}px`
+  if (url) return <img src={url} alt={name} style={{ width: s, height: s, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+  return (
+    <div style={{
+      width: s, height: s, borderRadius: '50%', flexShrink: 0,
+      background: color + '22', border: `1.5px solid ${color}44`,
+      color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.42, fontWeight: 700,
+    }}>
+      {name[0]?.toUpperCase()}
+    </div>
+  )
+}
+
 // ── Dropdown Menu ─────────────────────────────────────────────────────────────
 
 interface DropdownItem {
@@ -451,6 +466,7 @@ export default function Board() {
   const { agents, loadAgents } = useStore()
   const [boards, setBoards] = useState<Board[]>([])
   const [board, setBoard] = useState<BoardFull | null>(null)
+  const [users, setUsers] = useState<User[]>([])
   const [activeBoardId, setActiveBoardId] = useState<string>(() => localStorage.getItem('activeBoardId') ?? '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -490,8 +506,19 @@ export default function Board() {
 
   useEffect(() => {
     api.auth.me().then(setCurrentUser).catch(() => {})
+    api.users.list().then(setUsers).catch(() => {})
     loadAgents()
   }, [loadAgents])
+
+  function resolveActor(id: string | null, type: string): { name: string; color: string; url?: string } | null {
+    if (!id) return null
+    if (type === 'agent') {
+      const a = agents.find(ag => ag.id === id)
+      return a ? { name: a.name, color: a.avatar_color, url: a.avatar_url || undefined } : null
+    }
+    const u = users.find(u => u.id === id)
+    return u ? { name: u.display_name, color: u.avatar_color, url: u.avatar_url || undefined } : null
+  }
 
   useEffect(() => {
     loadBoardList()
@@ -821,6 +848,11 @@ export default function Board() {
                   background: 'rgba(8,18,40,0.72)',
                   backdropFilter: 'blur(14px)',
                   border: '1px solid rgba(255,255,255,0.10)',
+                  borderTop: `2px solid ${
+                    lane.lane_type === 'done' ? 'rgba(74,222,128,0.45)'
+                    : lane.lane_type === 'in_progress' ? 'rgba(251,191,36,0.45)'
+                    : 'rgba(255,255,255,0.15)'
+                  }`,
                 }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
@@ -892,34 +924,60 @@ export default function Board() {
                 </div>
 
                 {/* Cards */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[4rem]">
+                <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-[4rem]">
                   {cards.map((card) => {
-                    const assigneeName = card.assignee_type === 'agent'
-                      ? (agents.find((a) => a.id === card.assignee_id)?.name ?? null)
-                      : null
+                    const assignee = resolveActor(card.assignee_id, card.assignee_type ?? '')
+                    const createdBy = resolveActor(card.created_by, card.created_by_type)
                     return (
                       <div
                         key={card.id}
                         draggable
                         onDragStart={() => setDragging({ card, sourceLaneId: card.lane_id })}
                         onClick={() => setSelectedCard(card)}
-                        className="group rounded-lg px-3 py-2.5 cursor-pointer transition-all"
-                        style={{ background: 'rgba(8,18,40,0.60)', border: '1px solid rgba(255,255,255,0.09)' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(245,158,11,0.35)' }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.09)' }}
+                        className="group rounded-xl px-3 py-2.5 cursor-pointer transition-all"
+                        style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+                        onMouseEnter={(e) => {
+                          const el = e.currentTarget as HTMLElement
+                          el.style.borderColor = 'rgba(245,158,11,0.30)'
+                          el.style.background = 'rgba(255,255,255,0.055)'
+                        }}
+                        onMouseLeave={(e) => {
+                          const el = e.currentTarget as HTMLElement
+                          el.style.borderColor = 'rgba(255,255,255,0.08)'
+                          el.style.background = 'rgba(255,255,255,0.03)'
+                        }}
                       >
-                        <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{card.title}</p>
-                        {card.description && (
-                          <p className="text-xs text-muted mt-1 line-clamp-2">{card.description}</p>
+                        {/* Title */}
+                        <p className="text-sm font-medium leading-snug" style={{ color: 'var(--text-primary)' }}>{card.title}</p>
+
+                        {/* Created by */}
+                        {createdBy && (
+                          <p className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>by {createdBy.name}</p>
                         )}
-                        <div className="flex items-center gap-2 mt-1.5">
-                          {card.result && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24' }}>
-                              result ✓
-                            </span>
-                          )}
-                          {assigneeName && (
-                            <span className="text-[10px] text-muted ml-auto truncate max-w-[6rem]">{assigneeName}</span>
+
+                        {/* Description preview */}
+                        {card.description && (
+                          <p className="text-xs mt-1.5 line-clamp-2 leading-relaxed" style={{ color: 'var(--subtle)' }}>{card.description}</p>
+                        )}
+
+                        {/* Footer */}
+                        <div className="flex items-center justify-between mt-2 gap-2">
+                          <div className="flex items-center gap-1.5">
+                            {card.result ? (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>
+                                done ✓
+                              </span>
+                            ) : (
+                              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{timeAgo(card.updated_at)}</span>
+                            )}
+                          </div>
+                          {assignee ? (
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {avatar(assignee.name, assignee.color, assignee.url, 18)}
+                              <span className="text-[10px] truncate max-w-[72px]" style={{ color: 'var(--muted)' }}>{assignee.name}</span>
+                            </div>
+                          ) : (
+                            card.result && <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--muted)' }}>{timeAgo(card.updated_at)}</span>
                           )}
                         </div>
                       </div>
