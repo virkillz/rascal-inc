@@ -1,8 +1,32 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.ts'
 import { useAppEvents } from '../hooks/useAppEvents.ts'
 import { api, type BoardFull, type Card, type ChatMessage, type Agent, type User } from '../api.ts'
+import {
+  Users, CheckCircle, Zap, Circle, CheckCircle2,
+  Activity, Clock, AlertCircle, CalendarClock,
+  Loader2,
+} from 'lucide-react'
+
+// ── Welcome messages ────────────────────────────────────────────────────────────
+
+const WELCOME_MESSAGES = [
+  'Your empire awaits. The agents are sharp and the board is clear.',
+  'All systems nominal. Time to make something happen.',
+  'The crew is assembled. Ready for your orders.',
+  'The office never sleeps — and neither do your agents.',
+  'Productivity levels are off the charts. Or they will be.',
+  'Your agents are standing by. Give them something to chew on.',
+  'Another day, another opportunity to run a tight ship.',
+  'Operations are humming. You\'re in command.',
+  'Intelligence is up. Morale is high. Let\'s move.',
+  'The dashboard has been briefed. You\'re the only missing piece.',
+]
+
+function getWelcomeMessage() {
+  return WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)]
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -105,7 +129,6 @@ export default function Dashboard() {
         if (boards.length > 0) api.boards.get(boards[0].id).then(setBoard).catch(() => {})
       }).catch(() => {})
       // Add to activity
-      const actor = agents.find(a => a.id === event.cardId) // best-effort
       const item: ActivityItem = {
         id: `${Date.now()}`,
         text: `Card "${event.title}" was moved`,
@@ -162,21 +185,48 @@ export default function Dashboard() {
     }
   }
 
+  const [welcomeMsg] = useState(getWelcomeMessage)
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-5 space-y-4">
+
+        {/* ── Welcome Banner ── */}
+        <div
+          className="rounded-xl px-6 py-4 relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, rgba(8,18,40,0.95) 0%, rgba(20,35,70,0.95) 100%)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          {/* subtle accent glow */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse at 20% 50%, rgba(var(--accent), 0.08) 0%, transparent 60%)',
+            }}
+          />
+          <div className="relative">
+            <h1 className="text-lg font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
+              Welcome back, Chief.
+            </h1>
+            <p className="text-xs mt-1" style={{ color: 'var(--subtle)' }}>{welcomeMsg}</p>
+          </div>
+        </div>
 
         {/* ── Stats Bar ── */}
         <div
           className="grid gap-3"
           style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}
         >
-          <StatCard label="Total Staff" value={String(agents.length)} icon="👥" color="var(--status-blue)" />
-          <StatCard label="Active" value={String(activeAgents)} icon="✓" color="var(--status-green)" />
-          <StatCard label="Working" value={String(thinkingCount)} icon="⚡" color="rgb(var(--accent))" highlight={thinkingCount > 0} />
-          <StatCard label="To Do" value={String(todoCount)} icon="○" color="var(--subtle)" />
-          <StatCard label="In Progress" value={String(inProgressCount)} icon="◑" color="var(--status-amber)" />
-          <StatCard label="Done" value={String(doneCount)} icon="●" color="var(--status-green)" />
+          <StatCard label="Total Staff" value={String(agents.length)} icon={<Users size={16} />} color="var(--status-blue)" />
+          <StatCard label="Active" value={String(activeAgents)} icon={<CheckCircle size={16} />} color="var(--status-green)" />
+          <StatCard label="Working" value={String(thinkingCount)} icon={<Zap size={16} />} color="rgb(var(--accent))" highlight={thinkingCount > 0} />
+          <StatCard label="To Do" value={String(todoCount)} icon={<Circle size={16} />} color="var(--subtle)" />
+          <StatCard label="In Progress" value={String(inProgressCount)} icon={<Loader2 size={16} />} color="var(--status-amber)" />
+          <StatCard label="Done" value={String(doneCount)} icon={<CheckCircle2 size={16} />} color="var(--status-green)" />
         </div>
 
         {/* ── Main Grid ── */}
@@ -406,7 +456,7 @@ export default function Dashboard() {
                     </p>
                   ) : (
                     <>
-                      <span className="text-xl">💬</span>
+                      <Clock size={20} style={{ color: 'var(--muted)' }} />
                       <p className="text-xs" style={{ color: 'var(--muted)' }}>
                         Ask {agents.find(a => a.id === selectedAgentId)?.name ?? 'an agent'} anything
                       </p>
@@ -483,7 +533,7 @@ export default function Dashboard() {
 // ── Stat Card ──────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, icon, color, highlight }: {
-  label: string; value: string; icon: string; color: string; highlight?: boolean
+  label: string; value: string; icon: React.ReactNode; color: string; highlight?: boolean
 }) {
   return (
     <div
@@ -494,7 +544,7 @@ function StatCard({ label, value, icon, color, highlight }: {
         border: `1px solid ${highlight ? color + '44' : 'rgba(255,255,255,0.10)'}`,
       }}
     >
-      <span className="text-lg leading-none">{icon}</span>
+      <span style={{ color, opacity: 0.85 }}>{icon}</span>
       <div>
         <div className="text-xl font-bold leading-none" style={{ color }}>{value}</div>
         <div className="text-[10px] font-medium mt-0.5 uppercase tracking-wide" style={{ color: 'var(--muted)' }}>{label}</div>
@@ -569,18 +619,18 @@ function NotificationsWidget({ agents, agentStatus }: { agents: Agent[]; agentSt
 
     if (event.type === 'agent:thinking') {
       const a = agents.find(ag => ag.id === event.agentId)
-      item = { id: `${Date.now()}`, icon: '⚡', text: `${a?.name ?? 'Agent'} started working`, time, color: 'var(--status-amber)' }
+      item = { id: `${Date.now()}`, icon: 'zap', text: `${a?.name ?? 'Agent'} started working`, time, color: 'var(--status-amber)' }
     } else if (event.type === 'agent:idle') {
       const a = agents.find(ag => ag.id === event.agentId)
-      item = { id: `${Date.now()}`, icon: '✓', text: `${a?.name ?? 'Agent'} finished`, time, color: 'var(--status-green)' }
+      item = { id: `${Date.now()}`, icon: 'check', text: `${a?.name ?? 'Agent'} finished`, time, color: 'var(--status-green)' }
     } else if (event.type === 'agent:error') {
       const a = agents.find(ag => ag.id === event.agentId)
-      item = { id: `${Date.now()}`, icon: '✕', text: `${a?.name ?? 'Agent'} encountered an error`, time, color: 'var(--status-red)' }
+      item = { id: `${Date.now()}`, icon: 'alert', text: `${a?.name ?? 'Agent'} encountered an error`, time, color: 'var(--status-red)' }
     } else if (event.type === 'board:card_moved') {
-      item = { id: `${Date.now()}`, icon: '↕', text: `Card "${event.title}" moved`, time, color: 'var(--status-blue)' }
+      item = { id: `${Date.now()}`, icon: 'activity', text: `Card "${event.title}" moved`, time, color: 'var(--status-blue)' }
     } else if (event.type === 'schedule:fired') {
       const a = agents.find(ag => ag.id === event.agentId)
-      item = { id: `${Date.now()}`, icon: '⏰', text: `Schedule fired for ${a?.name ?? 'agent'}: ${event.label}`, time, color: 'rgb(var(--accent))' }
+      item = { id: `${Date.now()}`, icon: 'clock', text: `Schedule fired for ${a?.name ?? 'agent'}: ${event.label}`, time, color: 'rgb(var(--accent))' }
     }
 
     if (item) setItems(prev => [item!, ...prev].slice(0, 30))
@@ -593,25 +643,32 @@ function NotificationsWidget({ agents, agentStatus }: { agents: Agent[]; agentSt
     <div className="p-3 space-y-1.5" style={{ maxHeight: '220px', overflowY: 'auto' }}>
       {thinking.map(a => (
         <div key={a.id} className="flex items-start gap-2.5 py-1.5 px-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.06)' }}>
-          <span className="text-xs mt-0.5 flex-shrink-0" style={{ color: 'var(--status-amber)' }}>⚡</span>
+          <Zap size={12} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--status-amber)' }} />
           <div className="flex-1 min-w-0">
             <p className="text-xs leading-snug" style={{ color: 'var(--text-primary)' }}>{a.name} is working</p>
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>now</p>
           </div>
         </div>
       ))}
-      {items.map(item => (
-        <div key={item.id} className="flex items-start gap-2.5 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors">
-          <span className="text-xs mt-0.5 flex-shrink-0" style={{ color: item.color }}>{item.icon}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs leading-snug" style={{ color: 'var(--text-primary)' }}>{item.text}</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>{timeAgo(item.time)}</p>
+      {items.map(item => {
+        const Icon = item.icon === 'zap' ? Zap
+          : item.icon === 'check' ? CheckCircle2
+          : item.icon === 'alert' ? AlertCircle
+          : item.icon === 'clock' ? CalendarClock
+          : Activity
+        return (
+          <div key={item.id} className="flex items-start gap-2.5 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors">
+            <Icon size={12} className="mt-0.5 flex-shrink-0" style={{ color: item.color }} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs leading-snug" style={{ color: 'var(--text-primary)' }}>{item.text}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>{timeAgo(item.time)}</p>
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
       {items.length === 0 && thinking.length === 0 && (
         <div className="flex flex-col items-center justify-center py-8 gap-2">
-          <span className="text-xl">🔔</span>
+          <Clock size={20} style={{ color: 'var(--muted)' }} />
           <p className="text-xs" style={{ color: 'var(--muted)' }}>No recent notifications</p>
         </div>
       )}
@@ -672,14 +729,14 @@ function ActivityLog({ board, agents, users, extraItems }: {
   if (all.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-2">
-        <span className="text-xl">📋</span>
+        <Activity size={20} style={{ color: 'var(--muted)' }} />
         <p className="text-xs" style={{ color: 'var(--muted)' }}>No activity yet</p>
       </div>
     )
   }
 
   return (
-    <div className="divide-y" style={{ divideColor: 'rgba(255,255,255,0.05)', maxHeight: '280px', overflowY: 'auto' }}>
+    <div className="divide-y divide-white/5" style={{ maxHeight: '280px', overflowY: 'auto' }}>
       {all.map(item => (
         <div key={item.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors">
           <div className="flex-shrink-0">

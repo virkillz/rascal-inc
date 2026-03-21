@@ -3,6 +3,18 @@ import { useStore } from '../store.ts'
 import { api, type FileEntry } from '../api.ts'
 import { useAppEvents } from '../hooks/useAppEvents.ts'
 
+const TEXT_EXTENSIONS = new Set([
+  'md', 'txt', 'json', 'js', 'ts', 'tsx', 'jsx', 'html', 'htm', 'css',
+  'yaml', 'yml', 'toml', 'sh', 'bash', 'py', 'rb', 'go', 'rs', 'java',
+  'c', 'cpp', 'h', 'hpp', 'csv', 'xml', 'svg', 'env', 'gitignore',
+  'log', 'ini', 'conf', 'config',
+])
+
+function isTextFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  return TEXT_EXTENSIONS.has(ext) || !name.includes('.')
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -25,6 +37,11 @@ export default function Workspace() {
   const [selected, setSelected] = useState<FileEntry | null>(null)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [fileContent, setFileContent] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<FileEntry | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadWorkspace() }, [loadWorkspace])
@@ -46,7 +63,29 @@ export default function Workspace() {
 
   async function handleDelete(file: FileEntry) {
     await deleteWorkspaceFile(file.path)
-    if (selected?.path === file.path) setSelected(null)
+    setConfirmDelete(null)
+    if (selected?.path === file.path) { setSelected(null); setFileContent(null); setEditing(false) }
+  }
+
+  async function handleRead(file: FileEntry) {
+    const content = await api.workspace.read(file.path)
+    setFileContent(content)
+    setEditing(false)
+  }
+
+  function handleEdit() {
+    setEditContent(fileContent ?? '')
+    setEditing(true)
+  }
+
+  async function handleSave() {
+    if (!selected) return
+    setSaving(true)
+    try {
+      await api.workspace.save(selected.path, editContent)
+      setFileContent(editContent)
+      setEditing(false)
+    } finally { setSaving(false) }
   }
 
   // Group files by directory
@@ -117,7 +156,7 @@ export default function Workspace() {
                   className={`w-full flex items-center gap-2.5 px-4 py-2 text-left transition-colors ${
                     selected?.path === file.path ? 'bg-surface-3' : 'hover:bg-surface-2'
                   }`}
-                  onClick={() => setSelected(file)}
+                  onClick={() => { setSelected(file); setFileContent(null); setEditing(false) }}
                 >
                   <FileIcon name={file.name} />
                   <span
@@ -137,62 +176,158 @@ export default function Workspace() {
       {/* Detail panel */}
       <div className="flex-1 overflow-y-auto p-8">
         {selected ? (
-          <div className="max-w-md">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="w-12 h-12 bg-surface-2 border border-border rounded-xl flex items-center justify-center flex-shrink-0">
-                <FileIcon name={selected.name} large />
+          <div className="max-w-2xl">
+            <div className="bg-surface-2 border border-border rounded-xl p-5 mb-4">
+              <div className="flex items-start gap-4 mb-5">
+                <div className="w-12 h-12 bg-surface-3 border border-border rounded-xl flex items-center justify-center flex-shrink-0">
+                  <FileIcon name={selected.name} large />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{selected.name}</h2>
+                  <p className="text-xs text-muted mt-0.5 break-all">{selected.path}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{selected.name}</h2>
-                <p className="text-xs text-muted mt-0.5">{selected.path}</p>
+
+              <div className="space-y-2.5 mb-5">
+                <DetailRow label="Size" value={formatBytes(selected.size_bytes)} />
+                <DetailRow label="Type" value={selected.mime_type} />
+                <DetailRow label="Uploaded by" value={selected.uploaded_by ?? 'Human'} />
+                <DetailRow label="Created" value={formatDate(selected.created_at)} />
+                <DetailRow label="Modified" value={formatDate(selected.updated_at)} />
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  className="px-4 py-2 rounded-lg text-sm border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                  onClick={() => setConfirmDelete(selected)}
+                >
+                  Delete
+                </button>
+                <div className="flex gap-2">
+                  {isTextFile(selected.name) && !fileContent && (
+                    <button
+                      className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-surface-3 transition-colors"
+                      style={{ color: 'var(--text-primary)' }}
+                      onClick={() => handleRead(selected)}
+                    >
+                      View
+                    </button>
+                  )}
+                  {fileContent && !editing && (
+                    <button
+                      className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-surface-3 transition-colors"
+                      style={{ color: 'var(--text-primary)' }}
+                      onClick={handleEdit}
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <a
+                    href={api.workspace.downloadUrl(selected.path)}
+                    download={selected.name}
+                    className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2 no-underline"
+                  >
+                    <DownloadIcon />
+                    Download
+                  </a>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3 mb-6">
-              <DetailRow label="Size" value={formatBytes(selected.size_bytes)} />
-              <DetailRow label="Type" value={selected.mime_type} />
-              <DetailRow label="Uploaded by" value={selected.uploaded_by ?? 'Human'} />
-              <DetailRow label="Created" value={formatDate(selected.created_at)} />
-              <DetailRow label="Modified" value={formatDate(selected.updated_at)} />
+            {/* File viewer / editor */}
+            {fileContent !== null && (
+              <div className="bg-surface-2 border border-border rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                  <span className="text-xs text-muted">{selected.path}</span>
+                  {editing ? (
+                    <div className="flex gap-2">
+                      <button
+                        className="text-xs text-muted hover:text-subtle transition-colors"
+                        onClick={() => setEditing(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="text-xs font-medium text-accent hover:opacity-80 transition-opacity disabled:opacity-50"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
+                        {saving ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="text-xs text-muted hover:text-subtle transition-colors"
+                      onClick={() => setFileContent(null)}
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
+                {editing ? (
+                  <textarea
+                    className="w-full bg-transparent text-xs font-mono p-4 resize-none outline-none"
+                    style={{ color: 'var(--text-primary)', minHeight: '400px' }}
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    spellCheck={false}
+                  />
+                ) : (
+                  <pre
+                    className="text-xs font-mono p-4 overflow-x-auto whitespace-pre-wrap break-words"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {fileContent}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="bg-surface-2 border border-border rounded-xl px-8 py-6 text-center">
+              <div className="w-10 h-10 bg-surface-3 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <FolderIcon large />
+              </div>
+              <p className="text-sm" style={{ color: 'var(--text-primary)' }}>Select a file to view details</p>
             </div>
+          </div>
+        )}
+      </div>
 
-            <div className="flex gap-2">
-              <a
-                href={api.workspace.downloadUrl(selected.path)}
-                download={selected.name}
-                className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2 no-underline"
-              >
-                <DownloadIcon />
-                Download
-              </a>
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-surface-2 border border-border rounded-xl p-6 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Delete file?</h3>
+            <p className="text-xs text-muted mb-5 break-all">{confirmDelete.name}</p>
+            <div className="flex gap-2 justify-end">
               <button
-                className="px-4 py-2 rounded-lg text-sm border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                onClick={() => handleDelete(selected)}
+                className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-surface-3 transition-colors"
+                style={{ color: 'var(--text-primary)' }}
+                onClick={() => setConfirmDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg text-sm bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors"
+                onClick={() => handleDelete(confirmDelete)}
               >
                 Delete
               </button>
             </div>
           </div>
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-surface-2 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <FolderIcon large />
-              </div>
-              <p className="text-sm text-muted">Select a file to view details</p>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-3">
-      <span className="text-xs text-muted w-24 flex-shrink-0">{label}</span>
-      <span className="text-xs text-subtle truncate">{value}</span>
+    <div className="flex gap-3 py-1.5 border-b border-border/50 last:border-0">
+      <span className="text-xs text-muted w-24 flex-shrink-0 pt-px">{label}</span>
+      <span className="text-xs font-medium break-all" style={{ color: 'var(--text-primary)' }}>{value}</span>
     </div>
   )
 }

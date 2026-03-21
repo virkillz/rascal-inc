@@ -14,6 +14,7 @@ import chalk from 'chalk'
 import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting } from './db.js'
 import { eventBus } from './event-bus.js'
 import { buildAgentTools } from './platform-tools.js'
+import { pluginLoader } from './plugin-loader.js'
 
 let debugMode = false
 
@@ -66,7 +67,7 @@ export function setDataDir(dir: string): void {
   dataDir = dir
 }
 
-function resolveWorkspaceDir(): string {
+export function resolveWorkspaceDir(): string {
   return path.join(dataDir, 'workspace')
 }
 
@@ -98,7 +99,7 @@ function ensureSopFile(workspaceDir: string): void {
   }
 }
 
-function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
+export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
   // ── Layer 1: Platform prompt ─────────────────────────────────────────────
   const companyName = getSetting('company_name') ?? 'this company'
   const rawPlatformPrompt = getSetting('platform_prompt') ??
@@ -137,6 +138,21 @@ function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
     ? `## Your Open Todos\n${todos.map((t) => `[${t.id}] ${t.text}`).join('\n')}`
     : ''
 
+  // ── Plugin tools for this agent ─────────────────────────────────────────
+  let pluginToolsLines = ''
+  try {
+    const agentToolIds: string[] = JSON.parse(agent.model_config || '{}').tools ?? []
+    const dummyCtx = { agentId: agent.id, workspaceDir }
+    const pluginTools = pluginLoader.getToolsForIds(agentToolIds, dummyCtx)
+    if (pluginTools.length > 0) {
+      pluginToolsLines =
+        `\n\n## External Tools \n You also have these plugin tools available:\n` +
+        pluginTools.map((t) => `- ${t.name} — ${t.description}`).join('\n')
+    }
+  } catch {
+    // model_config parse failure — skip plugin tools
+  }
+
   const toolsBlock =
     `## Platform Tools\n` +
     `Your workspace is at: ${workspaceDir}\n` +
@@ -151,7 +167,8 @@ function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
     `- board_update_card — update a card's title, description, result, or assignee by cardId\n` +
     `- board_move_card — move a card to a different lane by cardId and laneId\n` +
     `Use memory_add proactively whenever you learn something worth remembering across conversations.\n` +
-    `Use todo_add to track multi-step work you intend to continue.`
+    `Use todo_add to track multi-step work you intend to continue.` +
+    pluginToolsLines
 
   return [platformPrompt, sopBlock, roleBlock, identityBlock, toolsBlock, memoryBlock, todoBlock]
     .filter(Boolean)

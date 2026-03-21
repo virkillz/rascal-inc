@@ -97,6 +97,7 @@ export const api = {
     update: (id: string, data: Partial<CreateAgentInput>) => req<Agent>('PUT', `/agents/${id}`, data),
     delete: (id: string) => req<{ ok: boolean }>('DELETE', `/agents/${id}`),
     toggleActive: (id: string) => req<{ id: string; is_active: boolean }>('POST', `/agents/${id}/toggle-active`),
+    previewPrompt: (id: string) => req<{ prompt: string }>('GET', `/agents/${id}/preview-prompt`),
   },
 
   // ─── Chat (direct agent DM — legacy) ─────────────────────────────────────
@@ -166,6 +167,15 @@ export const api = {
     },
     delete: (filePath: string) =>
       req<{ ok: boolean }>('DELETE', `/workspace?path=${encodeURIComponent(filePath)}`),
+    read: (filePath: string) =>
+      fetch(`${BASE}/workspace/download?path=${encodeURIComponent(filePath)}`, { credentials: 'include' })
+        .then((r) => { if (!r.ok) throw new Error('Read failed'); return r.text() }),
+    save: (filePath: string, content: string) =>
+      fetch(`${BASE}/workspace/content?path=${encodeURIComponent(filePath)}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'text/plain' },
+        body: content,
+      }).then((r) => { if (!r.ok) throw new Error('Save failed'); return r.json() as Promise<{ ok: boolean }> }),
   },
 
   // ─── Skills ───────────────────────────────────────────────────────────────
@@ -272,7 +282,7 @@ export interface Agent {
   description: string
   system_prompt: string
   model_config: string
-  modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string; allowedSkills?: string[] }
+  modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string; allowedSkills?: string[]; tools?: string[] }
   source: string
   avatar_color: string
   avatar_url: string

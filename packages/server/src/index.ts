@@ -25,7 +25,7 @@ const debugFlag = process.argv.includes('--debug')
 if (debugFlag) setDebugMode(true)
 
 const DATA_DIR = path.join(companyDir, 'data')
-const WORKSPACE_DIR = path.join(companyDir, 'workspace')
+const WORKSPACE_DIR = path.join(DATA_DIR, 'workspace')
 const ENV_FILE = path.join(companyDir, '.env')
 const CONFIG_FILE = path.join(companyDir, 'rascal.json')
 
@@ -53,7 +53,7 @@ async function cmdInit() {
 
   const gitignore = path.join(companyDir, '.gitignore')
   if (!fs.existsSync(gitignore)) {
-    fs.writeFileSync(gitignore, '.env\ndata/\nworkspace/\n')
+    fs.writeFileSync(gitignore, '.env\ndata/\n')
   }
 
   console.log(chalk.green('  Initialized!'))

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
 import { getDb } from '../db.js'
-import { clearSession } from '../agent-runner.js'
+import { clearSession, buildSystemPrompt, resolveWorkspaceDir } from '../agent-runner.js'
 
 export interface AgentRow {
   id: string
@@ -133,6 +133,15 @@ export function createAgentsRouter(): Router {
     getDb().prepare("UPDATE agents SET is_active = ?, updated_at = datetime('now') WHERE id = ?").run(newState, agent.id)
     if (!newState) clearSession(agent.id)
     res.json({ id: agent.id, is_active: newState === 1 })
+  })
+
+  // GET /api/agents/:id/preview-prompt
+  router.get('/:id/preview-prompt', (req, res) => {
+    const agent = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRow | undefined
+    if (!agent) return res.status(404).json({ error: 'Agent not found' })
+    const workspaceDir = resolveWorkspaceDir()
+    const prompt = buildSystemPrompt(agent, workspaceDir)
+    res.json({ prompt })
   })
 
   // DELETE /api/agents/:id

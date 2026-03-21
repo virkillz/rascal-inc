@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.ts'
-import { api, type Agent, type MemoryEntry, type TodoItem, type Schedule, type Skill } from '../api.ts'
+import { api, type Agent, type MemoryEntry, type TodoItem, type Schedule, type Skill, type Plugin as ApiPlugin } from '../api.ts'
 
 const PROVIDER_MODELS: Record<string, string[]> = {
   openrouter: [
@@ -36,7 +36,7 @@ const CRON_PRESETS = [
   { label: 'Every Monday', value: '0 9 * * 1' },
 ]
 
-type Section = 'profile' | 'model' | 'memory' | 'todos' | 'skills' | 'schedule'
+type Section = 'profile' | 'model' | 'memory' | 'todos' | 'skills' | 'plugins' | 'schedule' | 'prompt'
 
 const NAV_ITEMS: { id: Section; label: string }[] = [
   { id: 'profile', label: 'Profile' },
@@ -44,7 +44,9 @@ const NAV_ITEMS: { id: Section; label: string }[] = [
   { id: 'memory', label: 'Memory' },
   { id: 'todos', label: 'Todos' },
   { id: 'skills', label: 'Skills' },
+  { id: 'plugins', label: 'Plugins' },
   { id: 'schedule', label: 'Schedule' },
+  { id: 'prompt', label: 'System Prompt' },
 ]
 
 export default function AgentSettings() {
@@ -164,7 +166,9 @@ export default function AgentSettings() {
         {section === 'memory' && id && <MemorySection agentId={id} />}
         {section === 'todos' && id && <TodosSection agentId={id} />}
         {section === 'skills' && <SkillsSection agent={agent} onSave={handleSave} />}
+        {section === 'plugins' && <PluginsSection agent={agent} onSave={handleSave} />}
         {section === 'schedule' && id && <ScheduleSection agentId={id} />}
+        {section === 'prompt' && id && <PromptSection agentId={id} />}
       </div>
     </div>
   )
@@ -835,6 +839,135 @@ function SkillsSection({
   )
 }
 
+// ─── Plugins Section ──────────────────────────────────────────────────────────
+
+function PluginsSection({
+  agent,
+  onSave,
+}: {
+  agent: Agent
+  onSave: (data: { modelConfig: object }) => Promise<unknown>
+}) {
+  const [plugins, setPlugins] = useState<ApiPlugin[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+
+  const enabledTools: string[] = agent.modelConfig?.tools ?? []
+
+  useEffect(() => {
+    api.plugins.list().then(setPlugins).finally(() => setLoading(false))
+  }, [])
+
+  function isEnabled(plugin: ApiPlugin): boolean {
+    return plugin.toolIds.length > 0 && plugin.toolIds.every((id) => enabledTools.includes(id))
+  }
+
+  async function toggle(plugin: ApiPlugin, currentlyEnabled: boolean) {
+    setSaving(plugin.id)
+    try {
+      let next: string[]
+      if (currentlyEnabled) {
+        next = enabledTools.filter((id) => !plugin.toolIds.includes(id))
+      } else {
+        next = [...new Set([...enabledTools, ...plugin.toolIds])]
+      }
+      await onSave({ modelConfig: { ...agent.modelConfig, tools: next } })
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const configured = plugins.filter((p: ApiPlugin) => p.configured)
+  const unconfigured = plugins.filter((p: ApiPlugin) => !p.configured)
+
+  return (
+    <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
+      <div className="w-full max-w-xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+        <p className="text-xs text-muted mb-5">
+          Control which plugins this agent can use. Configure plugin API keys from the{' '}
+          <a href="/settings/plugins" className="text-accent hover:underline">
+            Plugins page
+          </a>
+          .
+        </p>
+
+        {loading && <p className="text-sm text-muted py-4">Loading…</p>}
+
+        {!loading && plugins.length === 0 && (
+          <div className="text-center py-10 text-gray-600 text-sm border border-dashed border-gray-700 rounded-xl">
+            No plugins available.
+          </div>
+        )}
+
+        {configured.length > 0 && (
+          <div className="space-y-2">
+            {configured.map((plugin) => {
+              const enabled = isEnabled(plugin)
+              return (
+                <div
+                  key={plugin.id}
+                  className="flex items-center gap-3 rounded-lg px-4 py-3"
+                  style={{ background: 'rgba(8,18,40,0.72)', border: '1px solid rgba(255,255,255,0.10)' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {plugin.display_name}
+                    </div>
+                    {plugin.description && (
+                      <p className="text-xs text-muted truncate">{plugin.description}</p>
+                    )}
+                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--subtle)' }}>
+                      Tools: {plugin.toolIds.join(', ')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggle(plugin, enabled)}
+                    disabled={saving === plugin.id}
+                    className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+                      enabled ? 'bg-accent' : 'bg-white/[0.07]'
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        enabled ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {unconfigured.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Not configured</p>
+            <div className="space-y-2">
+              {unconfigured.map((plugin) => (
+                <div
+                  key={plugin.id}
+                  className="flex items-center gap-3 rounded-lg px-4 py-3 opacity-40"
+                  style={{ background: 'rgba(8,18,40,0.72)', border: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {plugin.display_name}
+                    </div>
+                    {plugin.description && (
+                      <p className="text-xs text-muted truncate">{plugin.description}</p>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted flex-shrink-0">Needs API key</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Schedule Section ─────────────────────────────────────────────────────────
 
 function ScheduleSection({ agentId }: { agentId: string }) {
@@ -1122,5 +1255,78 @@ function PlayIcon() {
         d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
       />
     </svg>
+  )
+}
+
+// ─── Prompt Section ───────────────────────────────────────────────────────────
+
+function PromptSection({ agentId }: { agentId: string }) {
+  const [prompt, setPrompt] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    api.agents.previewPrompt(agentId)
+      .then((r) => setPrompt(r.prompt))
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [agentId])
+
+  function handleCopy() {
+    if (!prompt) return
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-6">
+      <div className="w-full max-w-3xl bg-gray-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-6 animate-zoom-in">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Combined System Prompt
+            </h2>
+            <p className="text-xs text-muted mt-0.5">
+              Read-only preview of the full prompt sent to the model at session start.
+            </p>
+          </div>
+          {prompt && (
+            <button
+              className="btn-secondary text-xs px-3 py-1.5"
+              onClick={handleCopy}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          )}
+        </div>
+
+        {loading && (
+          <div className="text-sm text-muted py-8 text-center">Loading…</div>
+        )}
+        {error && (
+          <div className="text-sm text-red-400 py-4">{error}</div>
+        )}
+        {prompt && (
+          <pre
+            className="text-xs leading-relaxed overflow-x-auto whitespace-pre-wrap rounded-xl p-4"
+            style={{
+              background: 'rgba(0,0,0,0.35)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              color: 'var(--subtle)',
+              fontFamily: 'ui-monospace, monospace',
+              maxHeight: '65vh',
+              overflowY: 'auto',
+            }}
+          >
+            {prompt}
+          </pre>
+        )}
+      </div>
+    </div>
   )
 }

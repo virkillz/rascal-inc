@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import express, { Router } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -125,6 +125,25 @@ export function createWorkspaceRouter(workspaceDir: string): Router {
     }
 
     res.sendFile(abs)
+  })
+
+  // PUT /api/workspace/content?path=... — save text file content
+  router.put('/content', express.text({ type: '*/*', limit: '10mb' }), (req, res) => {
+    const relPath = req.query.path as string | undefined
+    if (!relPath) {
+      res.status(400).json({ error: 'path is required' })
+      return
+    }
+    const abs = safeResolve(workspaceDir, relPath)
+    if (!abs) {
+      res.status(400).json({ error: 'Invalid path' })
+      return
+    }
+    const content = typeof req.body === 'string' ? req.body : JSON.stringify(req.body)
+    fs.mkdirSync(path.dirname(abs), { recursive: true })
+    fs.writeFileSync(abs, content, 'utf-8')
+    eventBus.emit({ type: 'workspace:change', path: relPath, action: 'updated' })
+    res.json({ ok: true })
   })
 
   // DELETE /api/workspace?path=...
