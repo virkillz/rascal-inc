@@ -48,8 +48,8 @@ interface AppState {
   // Schedules (per-agent, loaded on demand)
   schedules: Record<string, Schedule[]>
   loadSchedules: (agentId: string) => Promise<void>
-  addSchedule: (agentId: string, data: { cron: string; prompt: string; label?: string; skipIfNoTodos?: boolean }) => Promise<void>
-  patchSchedule: (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled' | 'skip_if_no_todos'>>) => Promise<void>
+  addSchedule: (agentId: string, data: { cron: string; prompt: string; label?: string }) => Promise<void>
+  patchSchedule: (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) => Promise<void>
   deleteSchedule: (agentId: string, id: number) => Promise<void>
 
   // Workspace

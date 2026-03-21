@@ -57,6 +57,7 @@ export function createSchedulesRouter(): Router {
 
     const updates = req.body as Partial<Pick<ScheduleRow, 'cron' | 'prompt' | 'label' | 'enabled'>>
 
+
     if (updates.cron !== undefined) {
       try {
         computeNextRun(updates.cron)

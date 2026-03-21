@@ -1,6 +1,6 @@
 import { CronExpressionParser } from 'cron-parser'
 import chalk from 'chalk'
-import { getDb, getSetting, getAgentTodos, type ScheduleRow } from './db.js'
+import { getDb, getSetting, type ScheduleRow } from './db.js'
 import { runScheduledTask, isDebugMode, type AgentRecord, type ModelConfig } from './agent-runner.js'
 import { eventBus } from './event-bus.js'
 
@@ -49,19 +49,6 @@ export function startScheduler(): void {
 
       // Skip inactive agents
       if (!agent) continue
-
-      // Skip if skip_if_no_todos is set and agent has no open todos
-      if (s.skip_if_no_todos) {
-        const openTodos = getAgentTodos(s.agent_id, true)
-        if (openTodos.length === 0) {
-          // Still advance next_run_at so it doesn't fire again immediately
-          try {
-            db.prepare('UPDATE agent_schedules SET last_run_at = ?, next_run_at = ? WHERE id = ?')
-              .run(now, computeNextRun(s.cron), s.id)
-          } catch { /* skip invalid cron */ }
-          continue
-        }
-      }
 
       // Advance to next run before firing so a crash doesn't re-fire
       let nextRun: string

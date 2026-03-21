@@ -142,9 +142,9 @@ export const api = {
 
   schedules: {
     list:   (agentId: string) => req<Schedule[]>('GET', `/agents/${agentId}/schedules`),
-    create: (agentId: string, data: { cron: string; prompt: string; label?: string; skipIfNoTodos?: boolean }) =>
+    create: (agentId: string, data: { cron: string; prompt: string; label?: string }) =>
       req<Schedule>('POST', `/agents/${agentId}/schedules`, data),
-    patch:  (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled' | 'skip_if_no_todos'>>) =>
+    patch:  (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) =>
       req<Schedule>('PATCH', `/agents/${agentId}/schedules/${id}`, data),
     delete: (agentId: string, id: number) =>
       req<{ ok: boolean }>('DELETE', `/agents/${agentId}/schedules/${id}`),
@@ -343,7 +343,6 @@ export interface Schedule {
   prompt: string
   label: string
   enabled: number
-  skip_if_no_todos: number
   last_run_at: string | null
   next_run_at: string | null
   created_at: string

@@ -128,7 +128,6 @@ function runMigrations(db: DB): void {
       prompt            TEXT    NOT NULL,
       label             TEXT    NOT NULL DEFAULT '',
       enabled           INTEGER NOT NULL DEFAULT 1,
-      skip_if_no_todos  INTEGER NOT NULL DEFAULT 0,
       last_run_at       TEXT,
       next_run_at       TEXT,
       created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -242,7 +241,6 @@ function runMigrations(db: DB): void {
   addColumnIfNotExists(db, 'agents', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
   // Mark the two seed agents (Fabiana and Clive) as default on existing installs
   db.exec(`UPDATE agents SET is_default = 1 WHERE name IN ('Fabiana', 'Clive') AND is_default = 0`)
-  addColumnIfNotExists(db, 'agent_schedules', 'skip_if_no_todos', 'INTEGER NOT NULL DEFAULT 0')
   addColumnIfNotExists(db, 'users', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'users', 'bio', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'cards', 'result', "TEXT NOT NULL DEFAULT ''")
@@ -423,7 +421,6 @@ export interface ScheduleRow {
   prompt: string
   label: string
   enabled: number
-  skip_if_no_todos: number
   last_run_at: string | null
   next_run_at: string | null
   created_at: string
