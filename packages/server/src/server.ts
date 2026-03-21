@@ -20,12 +20,19 @@ import { createBoardsRouter } from './api/boards.js'
 import { createChannelsRouter } from './api/channels.js'
 import { createSkillsRouter } from './api/skills.js'
 
-export function createApp(opts: { webDistDir?: string; workspaceDir?: string } = {}) {
+export function createApp(opts: { webDistDir?: string; workspaceDir?: string; dataDir?: string } = {}) {
   const app = express()
 
   app.use(cors({ origin: 'http://localhost:5173', credentials: true }))
   app.use(express.json())
   app.use(cookieParser())
+
+  // Serve user avatar uploads
+  if (opts.dataDir) {
+    const userAvatarsDir = path.join(opts.dataDir, 'user_avatars')
+    fs.mkdirSync(userAvatarsDir, { recursive: true })
+    app.use('/user_avatars', express.static(userAvatarsDir))
+  }
 
   // ── Auth + setup ────────────────────────────────────────────────────────────
   app.use('/api/setup', createSetupRouter())
@@ -61,8 +68,8 @@ export function createApp(opts: { webDistDir?: string; workspaceDir?: string } =
   return app
 }
 
-export function startServer(port: number, webDistDir?: string, workspaceDir?: string) {
-  const app = createApp({ webDistDir, workspaceDir })
+export function startServer(port: number, webDistDir?: string, workspaceDir?: string, dataDir?: string) {
+  const app = createApp({ webDistDir, workspaceDir, dataDir })
   const server = createServer(app)
   initWss(server)
   eventBus.on((event) => broadcast(event))

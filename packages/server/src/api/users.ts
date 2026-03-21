@@ -1,5 +1,8 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
+import path from 'path'
+import fs from 'fs'
+import multer from 'multer'
 import { getDb, type UserRow } from '../db.js'
 import {
   hashPassword,
@@ -11,6 +14,11 @@ import {
   SESSION_COOKIE,
   type AuthRequest,
 } from '../auth.js'
+
+let _userAvatarsDir = path.join(process.cwd(), 'data', 'user_avatars')
+export function setUserAvatarsDir(dir: string) {
+  _userAvatarsDir = dir
+}
 
 const AVATAR_COLORS = [
   '#7c6af7', '#f76a6a', '#6af7a0', '#f7c46a',
@@ -99,7 +107,7 @@ export function createUsersRouter(): Router {
     res.status(201).json(safeUser(user))
   })
 
-  // PUT /api/users/:id — update display name / password (admin or self)
+  // PUT /api/users/:id — update display name / password / bio (admin or self)
   router.put('/:id', requireAuth, async (req: AuthRequest, res) => {
     const target = getDb().prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as unknown as UserRow | undefined
     if (!target) return res.status(404).json({ error: 'User not found' })
@@ -108,20 +116,58 @@ export function createUsersRouter(): Router {
     const isAdmin = !!req.user!.is_admin
     if (!isSelf && !isAdmin) return res.status(403).json({ error: 'Forbidden' })
 
-    const { displayName, password, avatarColor } = req.body as {
+    const { displayName, password, avatarColor, bio } = req.body as {
       displayName?: string
       password?: string
       avatarColor?: string
+      bio?: string
     }
 
     const hash = password ? await hashPassword(password) : target.password_hash
 
     getDb()
-      .prepare('UPDATE users SET display_name = ?, password_hash = ?, avatar_color = ? WHERE id = ?')
-      .run(displayName?.trim() ?? target.display_name, hash, avatarColor ?? target.avatar_color, target.id)
+      .prepare('UPDATE users SET display_name = ?, password_hash = ?, avatar_color = ?, bio = ? WHERE id = ?')
+      .run(
+        displayName?.trim() ?? target.display_name,
+        hash,
+        avatarColor ?? target.avatar_color,
+        bio !== undefined ? bio.trim() : target.bio,
+        target.id,
+      )
 
     const updated = getDb().prepare('SELECT * FROM users WHERE id = ?').get(target.id) as unknown as UserRow
     res.json(safeUser(updated))
+  })
+
+  // POST /api/users/:id/avatar — upload avatar image (self or admin)
+  router.post('/:id/avatar', requireAuth, (req: AuthRequest, res) => {
+    const target = getDb().prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as unknown as UserRow | undefined
+    if (!target) return res.status(404).json({ error: 'User not found' })
+
+    const isSelf = req.user!.id === target.id
+    const isAdmin = !!req.user!.is_admin
+    if (!isSelf && !isAdmin) return res.status(403).json({ error: 'Forbidden' })
+
+    fs.mkdirSync(_userAvatarsDir, { recursive: true })
+    const storage = multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, _userAvatarsDir),
+      filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname) || '.jpg'
+        cb(null, `${target.id}${ext}`)
+      },
+    })
+    multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }).single('avatar')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message })
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+
+      const avatarUrl = `/user_avatars/${req.file.filename}`
+      getDb()
+        .prepare('UPDATE users SET avatar_url = ? WHERE id = ?')
+        .run(avatarUrl, target.id)
+
+      const updated = getDb().prepare('SELECT * FROM users WHERE id = ?').get(target.id) as unknown as UserRow
+      res.json(safeUser(updated))
+    })
   })
 
   // DELETE /api/users/:id — admin only; cannot delete yourself

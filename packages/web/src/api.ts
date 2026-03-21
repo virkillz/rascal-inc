@@ -62,8 +62,14 @@ export const api = {
     list: () => req<User[]>('GET', '/users'),
     create: (data: { username: string; displayName: string; password: string; isAdmin?: boolean }) =>
       req<User>('POST', '/users', data),
-    update: (id: string, data: { displayName?: string; password?: string; avatarColor?: string }) =>
+    update: (id: string, data: { displayName?: string; password?: string; avatarColor?: string; bio?: string }) =>
       req<User>('PUT', `/users/${id}`, data),
+    uploadAvatar: (id: string, file: File) => {
+      const form = new FormData()
+      form.append('avatar', file)
+      return fetch(`/api/users/${id}/avatar`, { method: 'POST', credentials: 'include', body: form })
+        .then(r => r.json()) as Promise<User>
+    },
     delete: (id: string) => req<{ ok: boolean }>('DELETE', `/users/${id}`),
   },
 
@@ -245,6 +251,8 @@ export interface User {
   username: string
   display_name: string
   avatar_color: string
+  avatar_url: string
+  bio: string
   is_admin: number
   created_at: string
 }

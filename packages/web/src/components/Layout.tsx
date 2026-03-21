@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store.ts'
 import { useTheme } from '../contexts/ThemeContext.tsx'
 import { api, type User } from '../api.ts'
@@ -20,6 +20,23 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
   }
 
   const [showCompanyModal, setShowCompanyModal] = useState(false)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [liveUser, setLiveUser] = useState<User | null>(currentUser)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setLiveUser(currentUser) }, [currentUser])
+
+  useEffect(() => {
+    if (!showUserMenu) return
+    function onClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [showUserMenu])
 
   const thinkingCount = Object.values(agentStatus).filter(s => s === 'thinking').length
   const now = new Date()
@@ -49,7 +66,7 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
           </div>
         </div>
 
-        {/* HUD Stats */}
+        {/* HUD Stats + User Menu */}
         <div className="flex items-center">
           <HudStat icon={<StaffIcon />} label="Staff" value={String(agents.length)} />
           <div className="w-px h-6 mx-1" style={{ background: 'var(--border)' }} />
@@ -70,6 +87,69 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
           >
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
+
+          {/* User avatar dropdown */}
+          <div className="relative ml-3" ref={userMenuRef}>
+            <button
+              onClick={() => setShowUserMenu(v => !v)}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold transition-opacity hover:opacity-80 overflow-hidden"
+              style={{ backgroundColor: liveUser?.avatar_color ?? 'rgb(var(--accent))', color: '#0a0f1a' }}
+              title={liveUser?.display_name ?? ''}
+            >
+              {liveUser?.avatar_url
+                ? <img src={liveUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                : (liveUser?.display_name ?? '?')[0].toUpperCase()
+              }
+            </button>
+
+            {showUserMenu && (
+              <div
+                className="absolute right-0 top-full mt-2 w-52 rounded-lg overflow-hidden z-50"
+                style={{ background: 'rgb(16, 32, 60)', border: '1px solid rgba(255,255,255,0.14)', boxShadow: '0 12px 32px rgba(0,0,0,0.7)' }}
+              >
+                {/* Identity header */}
+                <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div
+                    className="w-9 h-9 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center text-sm font-bold"
+                    style={{ backgroundColor: liveUser?.avatar_color ?? 'rgb(var(--accent))', color: '#0a0f1a' }}
+                  >
+                    {liveUser?.avatar_url
+                      ? <img src={liveUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                      : (liveUser?.display_name ?? '?')[0].toUpperCase()
+                    }
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {liveUser?.display_name}
+                    </div>
+                    <div className="text-[11px] truncate" style={{ color: 'var(--muted)' }}>
+                      @{liveUser?.username}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="py-1">
+                  <button
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/8"
+                    style={{ color: 'var(--text-primary)' }}
+                    onClick={() => { setShowUserMenu(false); setShowProfileModal(true) }}
+                  >
+                    <span className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--muted)' }}><UserCircleIcon /></span>
+                    My Profile
+                  </button>
+                  <button
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/8"
+                    style={{ color: 'var(--text-primary)' }}
+                    onClick={() => { setShowUserMenu(false); handleLogout() }}
+                  >
+                    <span className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--muted)' }}><LogoutIcon /></span>
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -138,28 +218,9 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
             )}
           </nav>
 
-          {/* Bottom: admin + user */}
-          <div className="px-3 py-3 space-y-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+          {/* Bottom: settings */}
+          <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}>
             <GameNavLink to="/settings" icon={<CogIcon />} label="Settings" />
-            <div className="flex items-center gap-2 px-3 py-2 mt-1">
-              <div
-                className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
-                style={{ backgroundColor: currentUser?.avatar_color ?? 'rgb(var(--accent))', color: '#0a0f1a' }}
-              >
-                {(currentUser?.display_name ?? '?')[0].toUpperCase()}
-              </div>
-              <span className="text-xs flex-1 truncate" style={{ color: 'var(--subtle)' }}>
-                {currentUser?.display_name ?? ''}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="w-6 h-6 rounded flex items-center justify-center transition-colors hover:bg-surface-3"
-                style={{ color: 'var(--muted)' }}
-                title="Log out"
-              >
-                <LogoutIcon />
-              </button>
-            </div>
           </div>
         </aside>
 
@@ -168,6 +229,15 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
           <Outlet />
         </main>
       </div>
+
+      {/* ── Profile Modal ── */}
+      {showProfileModal && liveUser && (
+        <ProfileModal
+          user={liveUser}
+          onClose={() => setShowProfileModal(false)}
+          onUpdated={setLiveUser}
+        />
+      )}
 
       {/* ── Company Info Modal ── */}
       {showCompanyModal && (
@@ -371,5 +441,137 @@ function LogoutIcon() {
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
     </svg>
+  )
+}
+
+function UserCircleIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  )
+}
+
+// ─── Profile Modal ────────────────────────────────────────────────────────────
+
+function ProfileModal({ user, onClose, onUpdated }: {
+  user: User
+  onClose: () => void
+  onUpdated: (u: User) => void
+}) {
+  const [displayName, setDisplayName] = useState(user.display_name)
+  const [bio, setBio] = useState(user.bio ?? '')
+  const [saving, setSaving] = useState(false)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      let updated = await api.users.update(user.id, { displayName, bio })
+      if (avatarFile) {
+        updated = await api.users.uploadAvatar(user.id, avatarFile)
+      }
+      onUpdated(updated)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleAvatarClick() {
+    fileInputRef.current?.click()
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  const avatarSrc = avatarPreview ?? (user.avatar_url || null)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm card p-8 space-y-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>My Profile</h2>
+
+        {/* Avatar */}
+        <div className="flex justify-center">
+          <button
+            onClick={handleAvatarClick}
+            className="relative group w-20 h-20 rounded-full overflow-hidden flex-shrink-0"
+            style={{ backgroundColor: user.avatar_color }}
+            title="Click to upload photo"
+          >
+            {avatarSrc
+              ? <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
+              : <span className="text-2xl font-bold text-white flex items-center justify-center w-full h-full">
+                  {(user.display_name)[0].toUpperCase()}
+                </span>
+            }
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ background: 'rgba(0,0,0,0.5)' }}>
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+              </svg>
+            </div>
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+        </div>
+
+        {/* Fields */}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>
+              Username
+            </label>
+            <div className="px-3 py-2 rounded text-sm" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--subtle)' }}>
+              @{user.username}
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>
+              Display Name
+            </label>
+            <input
+              className="input w-full text-sm"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: 'var(--muted)' }}>
+              Bio
+            </label>
+            <textarea
+              className="input w-full text-sm resize-none"
+              rows={3}
+              placeholder="A short bio..."
+              value={bio}
+              onChange={e => setBio(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button className="btn-ghost flex-1" onClick={onClose}>Cancel</button>
+          <button className="btn-primary flex-1" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

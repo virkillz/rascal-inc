@@ -239,6 +239,8 @@ function runMigrations(db: DB): void {
   addColumnIfNotExists(db, 'agents', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
   addColumnIfNotExists(db, 'agents', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'agent_schedules', 'skip_if_no_todos', 'INTEGER NOT NULL DEFAULT 0')
+  addColumnIfNotExists(db, 'users', 'avatar_url', "TEXT NOT NULL DEFAULT ''")
+  addColumnIfNotExists(db, 'users', 'bio', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'cards', 'result', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'cards', 'is_archived', 'INTEGER NOT NULL DEFAULT 0')
   addColumnIfNotExists(db, 'lanes', 'lane_type', "TEXT NOT NULL DEFAULT 'in_progress'")
@@ -419,6 +421,8 @@ export interface UserRow {
   username: string
   display_name: string
   avatar_color: string
+  avatar_url: string
+  bio: string
   password_hash: string
   is_admin: number
   created_at: string

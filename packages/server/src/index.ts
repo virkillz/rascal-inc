@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import chalk from 'chalk'
 import { initDb } from './db.js'
 import { setDataDir, setDebugMode } from './agent-runner.js'
+import { setUserAvatarsDir } from './api/users.js'
 import { setEnvFilePath } from './api/settings.js'
 import { setPluginsEnvFilePath, seedBuiltInPlugins } from './api/plugins.js'
 import { pluginLoader } from './plugin-loader.js'
@@ -80,6 +81,7 @@ async function cmdStart() {
   // Initialize services
   initDb(DATA_DIR)
   setDataDir(DATA_DIR)
+  setUserAvatarsDir(path.join(DATA_DIR, 'user_avatars'))
   setEnvFilePath(ENV_FILE)
   setPluginsEnvFilePath(ENV_FILE)
   // Initialize plugin loader — must run after env vars are loaded and DB is ready
@@ -96,7 +98,7 @@ async function cmdStart() {
   const webDist = path.join(__dirname, '../../web/dist')
   const webDistDir = fs.existsSync(webDist) ? webDist : undefined
 
-  startServer(PORT, webDistDir, WORKSPACE_DIR)
+  startServer(PORT, webDistDir, WORKSPACE_DIR, DATA_DIR)
 
   console.log(chalk.dim(`  company dir  ${companyDir}`))
   console.log(chalk.dim(`  data         ${DATA_DIR}`))
