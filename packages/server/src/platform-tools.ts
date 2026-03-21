@@ -130,71 +130,122 @@ export function makeTodoCompleteTool(agentId: string): ToolDefinition {
 
 // ── Board tools ───────────────────────────────────────────────────────────────
 
-export function makeBoardListCardsTool(): ToolDefinition {
+/** Returns all lanes on the single board — agents use this to discover lane IDs. */
+export function makeBoardListLanesTool(): ToolDefinition {
   return {
-    name: 'board_list_cards',
-    label: 'List Board Cards',
-    description: 'List cards on a board. Optionally filter by lane or assignee.',
+    name: 'board_list_lanes',
+    label: 'List Board Lanes',
+    description:
+      'List all available lanes on the board. Returns each lane with its id, name, type (todo/in_progress/done), and description. ' +
+      'Use this to discover lane IDs before moving cards.',
+    parameters: Type.Object({}),
+    execute: async () => {
+      const db = getDb()
+      const board = db.prepare('SELECT id FROM boards ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined
+      if (!board) throw new Error('No board found')
+      const lanes = db.prepare('SELECT * FROM lanes WHERE board_id = ? ORDER BY position ASC').all(board.id)
+      return ok(JSON.stringify(lanes, null, 2))
+    },
+  }
+}
+
+/** Returns all agents on the platform — use this to look up a teammate's ID before assigning a card. */
+export function makeBoardListAgentsTool(): ToolDefinition {
+  return {
+    name: 'board_list_agents',
+    label: 'List Agents',
+    description:
+      'List all agents on the platform with their id, name, role, and description. ' +
+      'Use this to look up an agent\'s ID before setting them as an assignee on a card.',
+    parameters: Type.Object({}),
+    execute: async () => {
+      const agents = getDb()
+        .prepare('SELECT id, name, role, description FROM agents ORDER BY name ASC')
+        .all()
+      return ok(JSON.stringify(agents, null, 2))
+    },
+  }
+}
+
+/** Returns only the cards assigned to this agent, optionally filtered by lane type. */
+export function makeBoardListMyCardsTool(agentId: string): ToolDefinition {
+  return {
+    name: 'board_list_my_cards',
+    label: 'List My Cards',
+    description:
+      'List cards assigned to you. Optionally filter by card type: todo, in_progress, or done.',
     parameters: Type.Object({
-      boardId: Type.String({ description: 'Board ID' }),
-      laneId: Type.Optional(Type.String({ description: 'Filter by lane ID' })),
-      assigneeId: Type.Optional(Type.String({ description: 'Filter by assignee ID' })),
+      laneType: Type.Optional(
+        Type.Union(
+          [Type.Literal('todo'), Type.Literal('in_progress'), Type.Literal('done')],
+          { description: 'Filter by lane type' },
+        ),
+      ),
     }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     execute: async (_id, params: any) => {
       const db = getDb()
-      let query = 'SELECT * FROM cards WHERE board_id = ? AND is_archived = 0'
-      const args: string[] = [params.boardId]
-      if (params.laneId) { query += ' AND lane_id = ?'; args.push(params.laneId) }
-      if (params.assigneeId) { query += ' AND assignee_id = ?'; args.push(params.assigneeId) }
-      query += ' ORDER BY position ASC'
+      let query =
+        `SELECT c.* FROM cards c JOIN lanes l ON l.id = c.lane_id ` +
+        `WHERE c.assignee_id = ? AND c.is_archived = 0`
+      const args: string[] = [agentId]
+      if (params.laneType) {
+        query += ' AND l.lane_type = ?'
+        args.push(params.laneType)
+      }
+      query += ' ORDER BY c.position ASC'
       const cards = db.prepare(query).all(...args)
       return ok(JSON.stringify(cards, null, 2))
     },
   }
 }
 
+/** Create a card — automatically placed in the todo lane. No board or lane ID needed. */
 export function makeBoardCreateCardTool(agentId: string): ToolDefinition {
   return {
     name: 'board_create_card',
     label: 'Create Board Card',
-    description: 'Create a new card on a board. You will be recorded as the creator.',
+    description:
+      'Create a new task card. It is automatically placed in the Todo lane. ' +
+      'You will be recorded as the creator.',
     parameters: Type.Object({
-      boardId: Type.String({ description: 'Board ID' }),
-      laneId: Type.String({ description: 'Lane ID to place the card in' }),
       title: Type.String({ description: 'Card title' }),
       description: Type.Optional(Type.String({ description: 'Task description' })),
       assigneeId: Type.Optional(Type.String({ description: 'ID of the assignee (agent or user)' })),
-      assigneeType: Type.Optional(Type.Union([Type.Literal('agent'), Type.Literal('user')], { description: 'Type of assignee' })),
+      assigneeType: Type.Optional(
+        Type.Union([Type.Literal('agent'), Type.Literal('user')], { description: 'Type of assignee' }),
+      ),
     }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     execute: async (_id, params: any) => {
       const { randomUUID } = await import('crypto')
       const db = getDb()
-      const lane = db.prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(params.laneId, params.boardId) as { id: string; name: string } | undefined
-      if (!lane) throw new Error(`Lane ${params.laneId} not found on board ${params.boardId}`)
-      const pos = (db.prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(params.laneId) as { c: number }).c
+      const board = db.prepare('SELECT id FROM boards ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined
+      if (!board) throw new Error('No board found')
+      const lane = db.prepare("SELECT id, name FROM lanes WHERE board_id = ? AND lane_type = 'todo' LIMIT 1").get(board.id) as { id: string; name: string } | undefined
+      if (!lane) throw new Error('No todo lane found on the board')
+      const pos = (db.prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(lane.id) as { c: number }).c
       const cardId = randomUUID()
       db.prepare(`
         INSERT INTO cards (id, board_id, lane_id, title, description, result, assignee_id, assignee_type, created_by, created_by_type, position)
         VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, 'agent', ?)
-      `).run(cardId, params.boardId, params.laneId, params.title, params.description ?? '', params.assigneeId ?? null, params.assigneeType ?? null, agentId, pos)
+      `).run(cardId, board.id, lane.id, params.title, params.description ?? '', params.assigneeId ?? null, params.assigneeType ?? null, agentId, pos)
       db.prepare(
         `INSERT INTO card_events (card_id, board_id, actor_id, actor_type, action, meta) VALUES (?, ?, ?, 'agent', 'created', ?)`
-      ).run(cardId, params.boardId, agentId, JSON.stringify({ lane: lane.name, title: params.title }))
+      ).run(cardId, board.id, agentId, JSON.stringify({ lane: lane.name, title: params.title }))
       const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(cardId)
       return ok(JSON.stringify(card, null, 2))
     },
   }
 }
 
+/** Update a card's title, description, result, or assignee. No board ID needed. */
 export function makeBoardUpdateCardTool(agentId: string): ToolDefinition {
   return {
     name: 'board_update_card',
     label: 'Update Board Card',
     description: "Update a card's title, description, result, or assignee.",
     parameters: Type.Object({
-      boardId: Type.String({ description: 'Board ID' }),
       cardId: Type.String({ description: 'Card ID' }),
       title: Type.Optional(Type.String({ description: 'New title' })),
       description: Type.Optional(Type.String({ description: 'New task description' })),
@@ -205,7 +256,7 @@ export function makeBoardUpdateCardTool(agentId: string): ToolDefinition {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     execute: async (_id, params: any) => {
       const db = getDb()
-      const card = db.prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(params.cardId, params.boardId) as Record<string, unknown> | undefined
+      const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(params.cardId) as Record<string, unknown> | undefined
       if (!card) throw new Error(`Card ${params.cardId} not found`)
       const changed: string[] = []
       if (params.title !== undefined && params.title !== card.title) changed.push('title')
@@ -228,7 +279,7 @@ export function makeBoardUpdateCardTool(agentId: string): ToolDefinition {
       if (changed.length > 0) {
         db.prepare(
           `INSERT INTO card_events (card_id, board_id, actor_id, actor_type, action, meta) VALUES (?, ?, ?, 'agent', 'updated', ?)`
-        ).run(params.cardId, params.boardId, agentId, JSON.stringify({ changed }))
+        ).run(params.cardId, card.board_id as string, agentId, JSON.stringify({ changed }))
       }
       const updated = db.prepare('SELECT * FROM cards WHERE id = ?').get(params.cardId)
       return ok(JSON.stringify(updated, null, 2))
@@ -236,29 +287,31 @@ export function makeBoardUpdateCardTool(agentId: string): ToolDefinition {
   }
 }
 
+/** Move a card to a different lane. No board ID needed — resolved from the card itself. */
 export function makeBoardMoveCardTool(agentId: string): ToolDefinition {
   return {
     name: 'board_move_card',
     label: 'Move Board Card',
-    description: 'Move a card to a different lane.',
+    description:
+      'Move a card to a different lane. Use board_list_lanes to get available lane IDs.',
     parameters: Type.Object({
-      boardId: Type.String({ description: 'Board ID' }),
       cardId: Type.String({ description: 'Card ID' }),
       laneId: Type.String({ description: 'Destination lane ID' }),
     }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     execute: async (_id, params: any) => {
       const db = getDb()
-      const card = db.prepare('SELECT * FROM cards WHERE id = ? AND board_id = ?').get(params.cardId, params.boardId) as Record<string, unknown> | undefined
+      const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(params.cardId) as Record<string, unknown> | undefined
       if (!card) throw new Error(`Card ${params.cardId} not found`)
-      const toLane = db.prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(params.laneId, params.boardId) as { id: string; name: string } | undefined
-      if (!toLane) throw new Error(`Lane ${params.laneId} not found on board ${params.boardId}`)
+      const boardId = card.board_id as string
+      const toLane = db.prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(params.laneId, boardId) as { id: string; name: string } | undefined
+      if (!toLane) throw new Error(`Lane ${params.laneId} not found on this board`)
       const fromLane = db.prepare('SELECT name FROM lanes WHERE id = ?').get(card.lane_id as string) as { name: string } | undefined
       const pos = (db.prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(params.laneId) as { c: number }).c
       db.prepare(`UPDATE cards SET lane_id = ?, position = ?, updated_at = datetime('now') WHERE id = ?`).run(params.laneId, pos, params.cardId)
       db.prepare(
         `INSERT INTO card_events (card_id, board_id, actor_id, actor_type, action, meta) VALUES (?, ?, ?, 'agent', 'moved', ?)`
-      ).run(params.cardId, params.boardId, agentId, JSON.stringify({ from_lane: fromLane?.name ?? '', to_lane: toLane.name }))
+      ).run(params.cardId, boardId, agentId, JSON.stringify({ from_lane: fromLane?.name ?? '', to_lane: toLane.name }))
       const updated = db.prepare('SELECT * FROM cards WHERE id = ?').get(params.cardId)
       return ok(JSON.stringify(updated, null, 2))
     },
@@ -274,7 +327,7 @@ export interface ToolContext {
 
 const PLATFORM_TOOL_IDS = new Set([
   'workspace-read', 'workspace-write',
-  'board_list_cards', 'board_create_card', 'board_update_card', 'board_move_card',
+  'board_list_agents', 'board_list_lanes', 'board_list_my_cards', 'board_create_card', 'board_update_card', 'board_move_card',
 ])
 
 /**
@@ -294,8 +347,14 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
         case 'workspace-write':
           tools.push(makeWorkspaceWriteTool(ctx.workspaceDir))
           break
-        case 'board_list_cards':
-          tools.push(makeBoardListCardsTool())
+        case 'board_list_agents':
+          tools.push(makeBoardListAgentsTool())
+          break
+        case 'board_list_lanes':
+          tools.push(makeBoardListLanesTool())
+          break
+        case 'board_list_my_cards':
+          tools.push(makeBoardListMyCardsTool(ctx.agentId))
           break
         case 'board_create_card':
           tools.push(makeBoardCreateCardTool(ctx.agentId))
@@ -321,7 +380,9 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
   tools.push(makeMemoryAddTool(ctx.agentId))
   tools.push(makeTodoAddTool(ctx.agentId))
   tools.push(makeTodoCompleteTool(ctx.agentId))
-  tools.push(makeBoardListCardsTool())
+  tools.push(makeBoardListAgentsTool())
+  tools.push(makeBoardListLanesTool())
+  tools.push(makeBoardListMyCardsTool(ctx.agentId))
   tools.push(makeBoardCreateCardTool(ctx.agentId))
   tools.push(makeBoardUpdateCardTool(ctx.agentId))
   tools.push(makeBoardMoveCardTool(ctx.agentId))

@@ -77,11 +77,11 @@ Admin can edit this file at any time — it is re-read at the start of every age
 
 ## Task Management
 
-- Any agent with the "assistant" role may create cards on the board.
+- Any agent may create cards on the board using \`board_create_card\` — no board or lane ID needed, cards go to Todo automatically.
 - Cards must have a clear title describing the task.
 - When a task is complete, fill in the \`result\` field before moving the card to Done.
 - Do not modify another agent's card description without explicit permission.
-- Use the \`board_move_card\` tool to update a card's status by moving it to the correct lane.
+- Use \`board_list_lanes\` to discover available lane IDs, then \`board_move_card\` to update a card's status.
 
 ## Communication
 
@@ -144,10 +144,12 @@ function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): string {
     `- workspace_read / workspace_write — read and write files in your workspace\n` +
     `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +
     `- todo_add / todo_complete — manage your task list (shown in your system prompt)\n` +
-    `- board_list_cards — list cards on a board, optionally filtered by lane or assignee\n` +
-    `- board_create_card — create a new card on a board (you will be recorded as creator)\n` +
-    `- board_update_card — update a card's title, description, result, or assignee\n` +
-    `- board_move_card — move a card to a different lane\n` +
+    `- board_list_agents — list all agents (id, name, role); use this to look up a teammate's ID before assigning a card\n` +
+    `- board_list_lanes — list all available lanes (id, name, type, description); no parameters needed\n` +
+    `- board_list_my_cards — list cards assigned to you; optionally filter by laneType (todo/in_progress/done)\n` +
+    `- board_create_card — create a card (auto-placed in Todo lane); use board_list_agents to get the assigneeId\n` +
+    `- board_update_card — update a card's title, description, result, or assignee by cardId\n` +
+    `- board_move_card — move a card to a different lane by cardId and laneId\n` +
     `Use memory_add proactively whenever you learn something worth remembering across conversations.\n` +
     `Use todo_add to track multi-step work you intend to continue.`
 

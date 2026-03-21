@@ -81,6 +81,14 @@ export function createBoardsRouter(): Router {
     res.json(boards)
   })
 
+  // GET /api/boards/lanes — list all lanes on the single board
+  router.get('/lanes', requireAuth, (_req, res) => {
+    const board = getDb().prepare('SELECT id FROM boards ORDER BY created_at ASC LIMIT 1').get() as { id: string } | undefined
+    if (!board) return res.status(404).json({ error: 'No board found' })
+    const lanes = getDb().prepare('SELECT * FROM lanes WHERE board_id = ? ORDER BY position ASC').all(board.id) as unknown as LaneRow[]
+    res.json(lanes)
+  })
+
   // GET /api/boards/:id — board with lanes + cards + rules
   router.get('/:id', requireAuth, (req, res) => {
     const board = getBoardFull(req.params.id)
@@ -88,20 +96,21 @@ export function createBoardsRouter(): Router {
     res.json(board)
   })
 
-  // POST /api/boards (admin only)
+  // POST /api/boards (admin only) — single board enforced
   router.post('/', requireAdmin, (req: AuthRequest, res) => {
+    const existing = (getDb().prepare('SELECT COUNT(*) as c FROM boards').get() as { c: number }).c
+    if (existing > 0) return res.status(409).json({ error: 'A board already exists. Only one board is allowed.' })
     const { name } = req.body as { name?: string }
     if (!name?.trim()) return res.status(400).json({ error: 'name required' })
     const id = randomUUID()
     getDb().prepare('INSERT INTO boards (id, name) VALUES (?, ?)').run(id, name.trim())
-    // Seed default lanes with types
-    const defaultLanes: { name: string; type: string }[] = [
-      { name: 'Todo', type: 'todo' },
-      { name: 'Doing', type: 'in_progress' },
-      { name: 'Done', type: 'done' },
+    const defaultLanes: { name: string; description: string; type: string }[] = [
+      { name: 'Todo', description: 'Tasks ready to be picked up', type: 'todo' },
+      { name: 'Doing', description: 'Tasks currently being worked on', type: 'in_progress' },
+      { name: 'Done', description: 'Completed tasks', type: 'done' },
     ]
-    defaultLanes.forEach(({ name, type }, i) => {
-      getDb().prepare('INSERT INTO lanes (id, board_id, name, position, lane_type) VALUES (?, ?, ?, ?, ?)').run(randomUUID(), id, name, i, type)
+    defaultLanes.forEach(({ name, description, type }, i) => {
+      getDb().prepare('INSERT INTO lanes (id, board_id, name, description, position, lane_type) VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), id, name, description, i, type)
     })
     res.status(201).json(getBoardFull(id))
   })
@@ -208,13 +217,20 @@ export function createBoardsRouter(): Router {
       assigneeId?: string
       assigneeType?: 'agent' | 'user'
     }
-    if (!laneId?.trim()) return res.status(400).json({ error: 'laneId required' })
     if (!title?.trim()) return res.status(400).json({ error: 'title required' })
 
-    const lane = getDb().prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(laneId, req.params.id) as { id: string; name: string } | undefined
-    if (!lane) return res.status(404).json({ error: 'Lane not found' })
+    // Resolve lane: use provided laneId or fall back to the todo lane
+    let lane: { id: string; name: string } | undefined
+    if (laneId?.trim()) {
+      lane = getDb().prepare('SELECT id, name FROM lanes WHERE id = ? AND board_id = ?').get(laneId, req.params.id) as { id: string; name: string } | undefined
+      if (!lane) return res.status(404).json({ error: 'Lane not found' })
+    } else {
+      lane = getDb().prepare("SELECT id, name FROM lanes WHERE board_id = ? AND lane_type = 'todo' LIMIT 1").get(req.params.id) as { id: string; name: string } | undefined
+      if (!lane) return res.status(404).json({ error: 'No todo lane found on this board' })
+    }
 
-    const pos = (getDb().prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(laneId) as { c: number }).c
+    const resolvedLaneId = lane.id
+    const pos = (getDb().prepare('SELECT COUNT(*) as c FROM cards WHERE lane_id = ?').get(resolvedLaneId) as { c: number }).c
     const id = randomUUID()
     const actorId = req.user!.id
     const actorType = 'user'
@@ -222,11 +238,11 @@ export function createBoardsRouter(): Router {
     getDb().prepare(`
       INSERT INTO cards (id, board_id, lane_id, title, description, result, assignee_id, assignee_type, created_by, created_by_type, position)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.id, laneId, title.trim(), description?.trim() ?? '', result?.trim() ?? '', assigneeId ?? null, assigneeType ?? null, actorId, actorType, pos)
+    `).run(id, req.params.id, resolvedLaneId, title.trim(), description?.trim() ?? '', result?.trim() ?? '', assigneeId ?? null, assigneeType ?? null, actorId, actorType, pos)
 
     const card = getDb().prepare('SELECT * FROM cards WHERE id = ?').get(id) as unknown as CardRow
     insertEvent(id, req.params.id, actorId, actorType, 'created', { lane: lane.name, title: card.title })
-    eventBus.emit({ type: 'board:card_moved', cardId: id, boardId: req.params.id, laneId, title: card.title })
+    eventBus.emit({ type: 'board:card_moved', cardId: id, boardId: req.params.id, laneId: resolvedLaneId, title: card.title })
     res.status(201).json(card)
   })
 

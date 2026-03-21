@@ -184,6 +184,7 @@ export const api = {
 
   boards: {
     list: () => req<Board[]>('GET', '/boards'),
+    listLanes: () => req<Lane[]>('GET', '/boards/lanes'),
     get: (id: string) => req<BoardFull>('GET', `/boards/${id}`),
     create: (name: string) => req<BoardFull>('POST', '/boards', { name }),
     addLane: (boardId: string, name: string, laneType?: 'todo' | 'in_progress' | 'done') =>
@@ -198,7 +199,7 @@ export const api = {
       req<{ ok: boolean }>('DELETE', `/boards/${boardId}/lanes/${laneId}/rules/${ruleId}`),
     update: (id: string, name: string) => req<Board>('PUT', `/boards/${id}`, { name }),
     delete: (id: string) => req<{ ok: boolean }>('DELETE', `/boards/${id}`),
-    addCard: (boardId: string, data: { laneId: string; title: string; description?: string; result?: string; assigneeId?: string; assigneeType?: 'agent' | 'user' }) =>
+    addCard: (boardId: string, data: { laneId?: string; title: string; description?: string; result?: string; assigneeId?: string; assigneeType?: 'agent' | 'user' }) =>
       req<Card>('POST', `/boards/${boardId}/cards`, data),
     updateCard: (boardId: string, cardId: string, data: { title?: string; description?: string; result?: string; assigneeId?: string | null; assigneeType?: 'agent' | 'user' | null }) =>
       req<Card>('PUT', `/boards/${boardId}/cards/${cardId}`, data),
@@ -361,6 +362,7 @@ export interface Lane {
   id: string
   board_id: string
   name: string
+  description: string
   position: number
   lane_type: 'todo' | 'in_progress' | 'done'
 }

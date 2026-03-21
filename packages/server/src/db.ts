@@ -151,11 +151,12 @@ function runMigrations(db: DB): void {
     );
 
     CREATE TABLE IF NOT EXISTS lanes (
-      id        TEXT PRIMARY KEY,
-      board_id  TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      name      TEXT NOT NULL,
-      position  INTEGER NOT NULL DEFAULT 0,
-      lane_type TEXT NOT NULL DEFAULT 'in_progress'
+      id          TEXT PRIMARY KEY,
+      board_id    TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      position    INTEGER NOT NULL DEFAULT 0,
+      lane_type   TEXT NOT NULL DEFAULT 'in_progress'
     );
 
     CREATE TABLE IF NOT EXISTS cards (
@@ -241,6 +242,7 @@ function runMigrations(db: DB): void {
   addColumnIfNotExists(db, 'cards', 'result', "TEXT NOT NULL DEFAULT ''")
   addColumnIfNotExists(db, 'cards', 'is_archived', 'INTEGER NOT NULL DEFAULT 0')
   addColumnIfNotExists(db, 'lanes', 'lane_type', "TEXT NOT NULL DEFAULT 'in_progress'")
+  addColumnIfNotExists(db, 'lanes', 'description', "TEXT NOT NULL DEFAULT ''")
 
   // Assign lane types to existing boards that have none set yet.
   // For each board where all lanes are still 'in_progress' (i.e. fresh migration),
@@ -271,14 +273,14 @@ function seedInitialData(db: DB): void {
   if (boardCount === 0) {
     const boardId = randomUUID()
     db.prepare("INSERT INTO boards (id, name) VALUES (?, 'Main Board')").run(boardId)
-    const lanes: { name: string; type: 'todo' | 'in_progress' | 'done' }[] = [
-      { name: 'Todo', type: 'todo' },
-      { name: 'Doing', type: 'in_progress' },
-      { name: 'Done', type: 'done' },
+    const lanes: { name: string; description: string; type: 'todo' | 'in_progress' | 'done' }[] = [
+      { name: 'Todo', description: 'Tasks ready to be picked up', type: 'todo' },
+      { name: 'Doing', description: 'Tasks currently being worked on', type: 'in_progress' },
+      { name: 'Done', description: 'Completed tasks', type: 'done' },
     ]
-    lanes.forEach(({ name, type }, i) => {
-      db.prepare('INSERT INTO lanes (id, board_id, name, position, lane_type) VALUES (?, ?, ?, ?, ?)')
-        .run(randomUUID(), boardId, name, i, type)
+    lanes.forEach(({ name, description, type }, i) => {
+      db.prepare('INSERT INTO lanes (id, board_id, name, description, position, lane_type) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(randomUUID(), boardId, name, description, i, type)
     })
   }
 
@@ -440,6 +442,7 @@ export interface LaneRow {
   id: string
   board_id: string
   name: string
+  description: string
   position: number
   lane_type: 'todo' | 'in_progress' | 'done'
 }
