@@ -11,7 +11,7 @@ import {
 import path from 'path'
 import fs from 'fs'
 import chalk from 'chalk'
-import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting, getAllAgents, getBoardLanes } from './db.js'
+import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting, getAllAgents, getBoardLanes, getAgentChannels } from './db.js'
 import { eventBus } from './event-bus.js'
 import { buildAgentTools } from './platform-tools.js'
 import { pluginLoader } from './plugin-loader.js'
@@ -141,12 +141,17 @@ export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): str
   // ── Static context: agents + lanes ───────────────────────────────────────
   const allAgents = getAllAgents()
   const agentsBlock = allAgents.length
-    ? `## Team Members\n${allAgents.map((a) => `- ${a.name} (id: ${a.id}) — ${a.role}`).join('\n')}`
+    ? `## Directory \n\n### Available Team Members\n${allAgents.map((a) => `- ${a.name} (id: ${a.id}) — ${a.role}`).join('\n')}`
     : ''
 
   const lanes = getBoardLanes()
   const lanesBlock = lanes.length
-    ? `## Board Lanes\n${lanes.map((l) => `- ${l.name} (id: ${l.id}, type: ${l.type})`).join('\n')}`
+    ? `### Available Board Lanes\n${lanes.map((l) => `- ${l.name} (id: ${l.id}, type: ${l.type})`).join('\n')}`
+    : ''
+
+  const channels = getAgentChannels(agent.id)
+  const channelsBlock = channels.length
+    ? `### Available Channels\n${channels.map((c: { id: string; name: string }) => `- #${c.name} (id: ${c.id})`).join('\n')}`
     : ''
 
   // ── Plugin tools for this agent ─────────────────────────────────────────
@@ -180,13 +185,17 @@ export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): str
     `Prioritize dedicated workspace tools, but you can also use the built-in read/write/edit/bash tools.\n` +
     `- workspace_read / workspace_write — read and write files in your workspace\n` +
     `When you complete a task, update the card's result with what you did and include a link to the file you created or updated.\n\n` +
+    `### Communication\n` +
+    `You can proactively post messages to channels — don't wait to be mentioned. Use this to share updates, ask teammates for help, or announce completed work.\n` +
+    `- channel_list — list channels you are a member of (use this if ## Channels is empty or to refresh)\n` +
+    `- channel_post — post a message to a channel by channelId\n\n` +
     `### Personal Notes\n` +
     `To be a good employee, you must remember things. Whenever you learn something worth remembering — especially related to work — write it to memory. If your task requires multi-step work you intend to continue, use your todo list.\n` +
     `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +
     `- todo_add / todo_complete — manage your task list (shown in your system prompt)` +
     pluginToolsLines
 
-  return [identityBlock, platformPrompt, roleBlock, sopBlock, toolsBlock, agentsBlock, lanesBlock, memoryBlock, todoBlock]
+  return [identityBlock, platformPrompt, roleBlock, sopBlock, toolsBlock, agentsBlock, lanesBlock, channelsBlock, memoryBlock, todoBlock]
     .filter(Boolean)
     .join('\n\n')
 }

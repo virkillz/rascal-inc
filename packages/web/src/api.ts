@@ -252,6 +252,12 @@ export const api = {
       req<{ ok: boolean }>('PATCH', `/channels/${channelId}/messages/${msgId}`, { content }),
     deleteMessage: (channelId: string, msgId: number) =>
       req<{ ok: boolean }>('DELETE', `/channels/${channelId}/messages/${msgId}`),
+    members: (channelId: string) =>
+      req<{ id: string; name: string; role: string; avatar_color: string }[]>('GET', `/channels/${channelId}/members`),
+    addMember: (channelId: string, agentId: string) =>
+      req<{ ok: boolean }>('POST', `/channels/${channelId}/members`, { agentId }),
+    removeMember: (channelId: string, agentId: string) =>
+      req<{ ok: boolean }>('DELETE', `/channels/${channelId}/members/${agentId}`),
   },
 }
 

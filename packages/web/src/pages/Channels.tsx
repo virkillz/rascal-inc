@@ -65,6 +65,8 @@ function MessageMenu({ msg, channelId, onDelete, onEditStart }: {
   )
 }
 
+type ChannelMember = { id: string; name: string; role: string; avatar_color: string }
+
 export default function Channels() {
   const { id: paramId } = useParams<{ id?: string }>()
   const { agents } = useStore()
@@ -75,13 +77,19 @@ export default function Channels() {
   const [sending, setSending] = useState(false)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [showMembers, setShowMembers] = useState(false)
+  const [members, setMembers] = useState<ChannelMember[]>([])
+  const [showAddAgent, setShowAddAgent] = useState(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [showCreateChannel, setShowCreateChannel] = useState(false)
+  const [newChannelName, setNewChannelName] = useState('')
+  const [creatingChannel, setCreatingChannel] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const membersRef = useRef<HTMLDivElement>(null)
+  const createInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     api.auth.me().then(setCurrentUser).catch(() => {})
@@ -89,18 +97,28 @@ export default function Channels() {
   }, [])
 
   useEffect(() => {
-    if (activeChannel) loadMessages(activeChannel.id)
+    if (activeChannel) {
+      loadMessages(activeChannel.id)
+      loadMembers(activeChannel.id)
+      setShowMembers(false)
+      setShowAddAgent(false)
+    }
   }, [activeChannel])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    if (showCreateChannel) setTimeout(() => createInputRef.current?.focus(), 0)
+  }, [showCreateChannel])
+
   // Close members panel on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (membersRef.current && !membersRef.current.contains(e.target as Node)) {
         setShowMembers(false)
+        setShowAddAgent(false)
       }
     }
     if (showMembers) document.addEventListener('mousedown', handler)
@@ -145,6 +163,39 @@ export default function Channels() {
   async function loadMessages(channelId: string) {
     const msgs = await api.channels.messages(channelId)
     setMessages(msgs)
+  }
+
+  async function loadMembers(channelId: string) {
+    const list = await api.channels.members(channelId)
+    setMembers(list)
+  }
+
+  async function createChannel() {
+    const name = newChannelName.trim()
+    if (!name || creatingChannel) return
+    setCreatingChannel(true)
+    try {
+      const ch = await api.channels.create(name)
+      setChannels((prev) => [...prev, ch])
+      setActiveChannel(ch)
+      setNewChannelName('')
+      setShowCreateChannel(false)
+    } finally {
+      setCreatingChannel(false)
+    }
+  }
+
+  async function addMember(agentId: string) {
+    if (!activeChannel) return
+    await api.channels.addMember(activeChannel.id, agentId)
+    await loadMembers(activeChannel.id)
+    setShowAddAgent(false)
+  }
+
+  async function removeMember(agentId: string) {
+    if (!activeChannel) return
+    await api.channels.removeMember(activeChannel.id, agentId)
+    setMembers((prev) => prev.filter((m) => m.id !== agentId))
   }
 
   async function sendMessage() {
@@ -204,18 +255,6 @@ export default function Channels() {
 
   function isOwnMessage(msg: ChannelMessage): boolean {
     return msg.sender_type === 'user' && !!currentUser && msg.sender_id === currentUser.id
-  }
-
-  // Participants = current user + all agents
-  function participants(): { name: string; color: string; type: 'agent' | 'user' }[] {
-    const list: { name: string; color: string; type: 'agent' | 'user' }[] = []
-    if (currentUser) {
-      list.push({ name: currentUser.display_name, color: currentUser.avatar_color ?? '#6ac5f7', type: 'user' })
-    }
-    for (const agent of agents) {
-      list.push({ name: agent.name, color: agent.avatar_color ?? '#7c6af7', type: 'agent' })
-    }
-    return list
   }
 
   // @mention autocomplete
@@ -286,7 +325,7 @@ export default function Channels() {
     }
   }
 
-  const members: { name: string; color: string; type: 'agent' | 'user' }[] = participants()
+  const nonMembers = agents.filter((a) => !members.some((m) => m.id === a.id))
 
   return (
     <div className="flex h-full">
@@ -300,9 +339,36 @@ export default function Channels() {
           borderRight: '1px solid rgba(255,255,255,0.10)',
         }}
       >
-        <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">Channels</span>
+          <button
+            onClick={() => setShowCreateChannel((v) => !v)}
+            className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
+            style={{ color: 'var(--muted)' }}
+            title="New channel"
+          >
+            <PlusIcon />
+          </button>
         </div>
+        {showCreateChannel && (
+          <div className="px-3 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <input
+              ref={createInputRef}
+              value={newChannelName}
+              onChange={(e) => setNewChannelName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') createChannel()
+                if (e.key === 'Escape') { setShowCreateChannel(false); setNewChannelName('') }
+              }}
+              placeholder="channel-name"
+              className="w-full bg-transparent text-xs outline-none rounded px-2 py-1.5"
+              style={{
+                color: 'var(--text-primary)',
+                border: '1px solid rgba(255,255,255,0.15)',
+              }}
+            />
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto py-2">
           {channels.map((ch) => (
             <button
@@ -342,19 +408,19 @@ export default function Channels() {
               {/* Participant count button */}
               <div className="relative" ref={membersRef}>
                 <button
-                  onClick={() => setShowMembers((v) => !v)}
+                  onClick={() => { setShowMembers((v) => !v); setShowAddAgent(false) }}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/8"
                   style={{ color: showMembers ? 'var(--text-primary)' : 'var(--muted)' }}
                   title="Channel members"
                 >
                   <PeopleIcon />
-                  <span>{members.length}</span>
+                  <span>{members.length + (currentUser ? 1 : 0)}</span>
                 </button>
 
                 {/* Members popover */}
                 {showMembers && (
                   <div
-                    className="absolute right-0 top-full mt-2 w-52 rounded-xl shadow-2xl z-50 overflow-hidden"
+                    className="absolute right-0 top-full mt-2 w-56 rounded-xl shadow-2xl z-50 overflow-hidden"
                     style={{
                       background: 'rgba(8,18,40,0.95)',
                       border: '1px solid rgba(255,255,255,0.12)',
@@ -362,33 +428,90 @@ export default function Channels() {
                       WebkitBackdropFilter: 'blur(20px)',
                     }}
                   >
-                    <div className="px-3 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div className="px-3 py-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                        Members — {members.length}
+                        Members
                       </span>
+                      <button
+                        onClick={() => setShowAddAgent((v) => !v)}
+                        className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+                        style={{ color: 'var(--muted)' }}
+                        title="Add agent"
+                      >
+                        <PlusIcon /> Add agent
+                      </button>
                     </div>
-                    <div className="py-1 max-h-64 overflow-y-auto">
-                      {members.length === 0 ? (
-                        <p className="text-xs text-muted px-3 py-3">No activity yet</p>
-                      ) : (
-                        members.map((m) => (
-                          <div key={m.name} className="flex items-center gap-2.5 px-3 py-2">
+
+                    {/* Add agent picker */}
+                    {showAddAgent && nonMembers.length > 0 && (
+                      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                        {nonMembers.map((a) => (
+                          <button
+                            key={a.id}
+                            onClick={() => addMember(a.id)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/8 transition-colors"
+                          >
                             <div
-                              className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
-                              style={{ backgroundColor: m.color }}
+                              className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-white"
+                              style={{ backgroundColor: a.avatar_color }}
                             >
-                              {m.name[0]?.toUpperCase()}
+                              {a.name[0]?.toUpperCase()}
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                                {m.name}
-                              </p>
-                              {m.type === 'agent' && (
-                                <p className="text-[10px] text-muted">AI agent</p>
-                              )}
-                            </div>
+                            <span className="text-xs truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showAddAgent && nonMembers.length === 0 && (
+                      <p className="text-xs text-muted px-3 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                        All agents are members
+                      </p>
+                    )}
+
+                    <div className="py-1 max-h-52 overflow-y-auto">
+                      {/* Current user */}
+                      {currentUser && (
+                        <div className="flex items-center gap-2.5 px-3 py-2">
+                          <div
+                            className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
+                            style={{ backgroundColor: currentUser.avatar_color ?? '#6ac5f7' }}
+                          >
+                            {currentUser.display_name[0]?.toUpperCase()}
                           </div>
-                        ))
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                              {currentUser.display_name}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {/* Agent members */}
+                      {members.map((m) => (
+                        <div key={m.id} className="flex items-center gap-2.5 px-3 py-2 group">
+                          <div
+                            className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
+                            style={{ backgroundColor: m.avatar_color ?? '#7c6af7' }}
+                          >
+                            {m.name[0]?.toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                              {m.name}
+                            </p>
+                            <p className="text-[10px] text-muted">AI agent</p>
+                          </div>
+                          <button
+                            onClick={() => removeMember(m.id)}
+                            className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-0.5 rounded"
+                            style={{ color: '#f87171' }}
+                            title="Remove from channel"
+                          >
+                            <XIcon />
+                          </button>
+                        </div>
+                      ))}
+                      {members.length === 0 && !currentUser && (
+                        <p className="text-xs text-muted px-3 py-3">No members yet</p>
                       )}
                     </div>
                   </div>
@@ -622,6 +745,22 @@ export default function Channels() {
         )}
       </div>
     </div>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
   )
 }
 

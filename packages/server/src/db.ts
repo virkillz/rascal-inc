@@ -538,6 +538,23 @@ export function getAgentRoles(agentId: string): RoleRow[] {
     .all(agentId) as unknown as RoleRow[]
 }
 
+export function getAllChannels(): { id: string; name: string }[] {
+  return getDb()
+    .prepare("SELECT id, name FROM channels WHERE is_dm = 0 ORDER BY created_at ASC")
+    .all() as { id: string; name: string }[]
+}
+
+export function getAgentChannels(agentId: string): { id: string; name: string }[] {
+  return getDb()
+    .prepare(`
+      SELECT c.id, c.name FROM channels c
+      JOIN channel_members cm ON cm.channel_id = c.id
+      WHERE c.is_dm = 0 AND cm.member_id = ? AND cm.member_type = 'agent'
+      ORDER BY c.created_at ASC
+    `)
+    .all(agentId) as { id: string; name: string }[]
+}
+
 export function getAllAgents(): { id: string; name: string; role: string }[] {
   return getDb()
     .prepare('SELECT id, name, role FROM agents ORDER BY name ASC')

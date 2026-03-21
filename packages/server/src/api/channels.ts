@@ -267,6 +267,43 @@ export function createChannelsRouter(): Router {
     res.json({ ok: true })
   })
 
+  // GET /api/channels/:id/members — list agent members of a channel
+  router.get('/:id/members', requireAuth, (req, res) => {
+    const channel = getDb().prepare('SELECT id FROM channels WHERE id = ? AND is_dm = 0').get(req.params.id)
+    if (!channel) return res.status(404).json({ error: 'Channel not found' })
+    const members = getDb()
+      .prepare(`
+        SELECT a.id, a.name, a.role, a.avatar_color FROM agents a
+        JOIN channel_members cm ON cm.member_id = a.id
+        WHERE cm.channel_id = ? AND cm.member_type = 'agent'
+        ORDER BY a.name ASC
+      `)
+      .all(req.params.id)
+    res.json(members)
+  })
+
+  // POST /api/channels/:id/members — add an agent to a channel
+  router.post('/:id/members', requireAdmin, (req, res) => {
+    const { agentId } = req.body as { agentId?: string }
+    if (!agentId) return res.status(400).json({ error: 'agentId required' })
+    const channel = getDb().prepare('SELECT id FROM channels WHERE id = ? AND is_dm = 0').get(req.params.id)
+    if (!channel) return res.status(404).json({ error: 'Channel not found' })
+    const agent = getDb().prepare('SELECT id FROM agents WHERE id = ?').get(agentId)
+    if (!agent) return res.status(404).json({ error: 'Agent not found' })
+    getDb()
+      .prepare('INSERT OR IGNORE INTO channel_members (channel_id, member_id, member_type) VALUES (?, ?, ?)')
+      .run(req.params.id, agentId, 'agent')
+    res.status(201).json({ ok: true })
+  })
+
+  // DELETE /api/channels/:id/members/:agentId — remove an agent from a channel
+  router.delete('/:id/members/:agentId', requireAdmin, (req, res) => {
+    getDb()
+      .prepare("DELETE FROM channel_members WHERE channel_id = ? AND member_id = ? AND member_type = 'agent'")
+      .run(req.params.id, req.params.agentId)
+    res.json({ ok: true })
+  })
+
   // GET /api/channels/public — convenience shortcut
   router.get('/public', requireAuth, (_req, res) => {
     try {

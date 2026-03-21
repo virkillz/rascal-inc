@@ -10,7 +10,7 @@ import fs from 'fs'
 import path from 'path'
 import { Type } from '@sinclair/typebox'
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent'
-import { getDb } from './db.js'
+import { getDb, getAgentChannels } from './db.js'
 import { pluginLoader } from './plugin-loader.js'
 
 // ── Result helper ─────────────────────────────────────────────────────────────
@@ -318,6 +318,65 @@ export function makeBoardMoveCardTool(agentId: string): ToolDefinition {
   }
 }
 
+// ── Channel tools ─────────────────────────────────────────────────────────────
+
+/** List the channels this agent is a member of. */
+export function makeChannelListTool(agentId: string): ToolDefinition {
+  return {
+    name: 'channel_list',
+    label: 'List My Channels',
+    description:
+      'List all channels you are a member of. Returns channel id and name. ' +
+      'Use channel_post to send a message to one of these channels.',
+    parameters: Type.Object({}),
+    execute: async () => {
+      const channels = getAgentChannels(agentId)
+      if (!channels.length) return ok('You are not a member of any channels.')
+      return ok(JSON.stringify(channels, null, 2))
+    },
+  }
+}
+
+/** Post a message to a channel as this agent. */
+export function makeChannelPostTool(agentId: string): ToolDefinition {
+  return {
+    name: 'channel_post',
+    label: 'Post to Channel',
+    description:
+      'Post a message to a channel. Use this to communicate updates, ask questions, or share results with the team. ' +
+      'The channelId is available in your system prompt under ## Channels.',
+    parameters: Type.Object({
+      channelId: Type.String({ description: 'ID of the channel to post to' }),
+      content: Type.String({ description: 'The message content' }),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const db = getDb()
+      const channel = db.prepare('SELECT id, name FROM channels WHERE id = ? AND is_dm = 0').get(params.channelId) as { id: string; name: string } | undefined
+      if (!channel) throw new Error(`Channel not found: ${params.channelId}`)
+      const agent = db.prepare('SELECT name FROM agents WHERE id = ?').get(agentId) as { name: string } | undefined
+      const agentName = agent?.name ?? agentId
+
+      const { eventBus } = await import('./event-bus.js')
+      const msgId = (db
+        .prepare('INSERT INTO channel_messages (channel_id, sender_id, sender_type, content) VALUES (?, ?, ?, ?)')
+        .run(params.channelId, agentId, 'agent', params.content.trim()) as { lastInsertRowid: number | bigint }).lastInsertRowid as number
+
+      eventBus.emit({
+        type: 'channel:message',
+        channelId: params.channelId,
+        senderId: agentId,
+        senderType: 'agent',
+        senderName: agentName,
+        content: params.content.trim(),
+        messageId: msgId,
+      })
+
+      return ok(`Message posted to #${channel.name}`)
+    },
+  }
+}
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 export interface ToolContext {
@@ -376,7 +435,7 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
     tools.push(...pluginTools)
   }
 
-  // Every agent always gets memory, todo, and board tools
+  // Every agent always gets memory, todo, board, and channel tools
   tools.push(makeMemoryAddTool(ctx.agentId))
   tools.push(makeTodoAddTool(ctx.agentId))
   tools.push(makeTodoCompleteTool(ctx.agentId))
@@ -386,6 +445,8 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
   tools.push(makeBoardCreateCardTool(ctx.agentId))
   tools.push(makeBoardUpdateCardTool(ctx.agentId))
   tools.push(makeBoardMoveCardTool(ctx.agentId))
+  tools.push(makeChannelListTool(ctx.agentId))
+  tools.push(makeChannelPostTool(ctx.agentId))
 
   return tools
 }
