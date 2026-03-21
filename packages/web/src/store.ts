@@ -52,6 +52,11 @@ interface AppState {
   patchSchedule: (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) => Promise<void>
   deleteSchedule: (agentId: string, id: number) => Promise<void>
 
+  // Unread DM channels (set of channel IDs with unread messages)
+  unreadDmChannels: Set<string>
+  addUnreadDm: (channelId: string) => void
+  markDmRead: (channelId: string) => void
+
   // Workspace
   workspaceFiles: FileEntry[]
   loadWorkspace: () => Promise<void>
@@ -72,6 +77,7 @@ export const useStore = create<AppState>((set, get) => ({
   memory: {},
   todos: {},
   schedules: {},
+  unreadDmChannels: new Set<string>(),
   workspaceFiles: [],
   plugins: [],
 
@@ -223,6 +229,24 @@ export const useStore = create<AppState>((set, get) => ({
         [agentId]: (s.schedules[agentId] ?? []).filter((sc) => sc.id !== id),
       },
     }))
+  },
+
+  // ─── Unread DMs ─────────────────────────────────────────────────────────────
+
+  addUnreadDm: (channelId) => {
+    set((s) => {
+      const next = new Set(s.unreadDmChannels)
+      next.add(channelId)
+      return { unreadDmChannels: next }
+    })
+  },
+
+  markDmRead: (channelId) => {
+    set((s) => {
+      const next = new Set(s.unreadDmChannels)
+      next.delete(channelId)
+      return { unreadDmChannels: next }
+    })
   },
 
   // ─── Workspace ──────────────────────────────────────────────────────────────

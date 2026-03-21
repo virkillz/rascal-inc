@@ -71,6 +71,10 @@ export function resolveWorkspaceDir(): string {
   return path.join(dataDir, 'workspace')
 }
 
+export function resolveSessionsDir(agentId: string): string {
+  return path.join(dataDir, 'sessions', agentId)
+}
+
 const DEFAULT_SOP = ``
 
 function ensureSopFile(workspaceDir: string): void {
@@ -172,9 +176,17 @@ export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): str
     `- channel_list — list channels you are a member of (use this if ## Channels is empty or to refresh)\n` +
     `- channel_get_messages — fetch the last 10 messages from a channel by channelId\n` +
     `- channel_post — post a message to a channel by channelId\n\n` +
-    `### Hiring\n` +
-    `If a task requires a specialist that doesn't exist yet, you can hire a new agent.\n` +
-    `- create_agent — create a new agent with a name, role, description, and system prompt\n\n` +
+    `### Direct Messages\n` +
+    `You can send a direct message to a human user (defaults to the workspace owner/admin).\n` +
+    `- send_direct_message — send a DM to a human user; omit user_id to message the workspace owner\n\n` +
+    `### Scheduling\n` +
+    `You can create recurring scheduled tasks for yourself using a cron expression.\n` +
+    `- create_schedule — create a recurring task with label, cron expression, and prompt\n` +
+    `  Common cron examples:\n` +
+    `    "0 11 * * *"   — every day at 11:00 AM UTC\n` +
+    `    "0 9 * * 1"    — every Monday at 9:00 AM UTC\n` +
+    `    "0 */4 * * *"  — every 4 hours\n` +
+    `  Example: to send a daily report, create a schedule whose prompt calls send_direct_message.\n\n` +
     `### Personal Notes\n` +
     `To be a good employee, you must remember things. Whenever you learn something worth remembering — especially related to work — write it to memory. If your task requires multi-step work you intend to continue, use your todo list.\n` +
     `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +
@@ -228,6 +240,7 @@ async function createLiveSession(
     cwd: workspaceDir,
     systemPromptOverride: () => systemPrompt,
     agentsFilesOverride: () => ({ agentsFiles: [] }),
+    appendSystemPromptOverride: () => [],
     ...(allowedSkills && {
       skillsOverride: (base) => ({
         ...base,

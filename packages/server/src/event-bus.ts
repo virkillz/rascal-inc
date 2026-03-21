@@ -14,6 +14,7 @@ export type AppEvent =
   | { type: 'memory:created'; agentId: string; entry: MemoryRow }
   | { type: 'memory:deleted'; agentId: string; entryId: number }
   | { type: 'schedule:fired'; agentId: string; scheduleId: number; label: string }
+  | { type: 'schedule:created'; agentId: string; scheduleId: number; label: string }
   | { type: 'workspace:change'; path: string; action: 'created' | 'updated' | 'deleted' }
   // ── Plugin events ─────────────────────────────────────────────────────────────
   | { type: 'plugin:configured'; pluginId: string }

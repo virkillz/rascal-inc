@@ -13,7 +13,7 @@ let _idCounter = 0
 function nextId() { return String(++_idCounter) }
 
 export default function NotificationCenter() {
-  const { agents } = useStore()
+  const { agents, loadSchedules } = useStore()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -31,6 +31,9 @@ export default function NotificationCenter() {
       push({ message: `${agentName(event.agentId)}: ${event.error}`, type: 'error' })
     } else if (event.type === 'schedule:fired') {
       push({ message: `Schedule fired for ${agentName(event.agentId)}: ${event.label || 'unnamed'}`, type: 'schedule' })
+    } else if (event.type === 'schedule:created') {
+      loadSchedules(event.agentId)
+      push({ message: `${agentName(event.agentId)} created schedule: ${event.label || 'unnamed'}`, type: 'schedule' })
     } else if (event.type === 'board:card_moved') {
       push({ message: `Card moved: "${event.title}"`, type: 'board' })
     }

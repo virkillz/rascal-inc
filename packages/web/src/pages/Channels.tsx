@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, type Channel, type ChannelMessage, type Agent, type User } from '../api.ts'
+import { api, type Channel, type DmChannel, type ChannelMessage, type Agent, type User } from '../api.ts'
 import { useStore } from '../store.ts'
 import { useAppEvents } from '../hooks/useAppEvents.ts'
 
@@ -69,8 +69,9 @@ type ChannelMember = { id: string; name: string; role: string; avatar_color: str
 
 export default function Channels() {
   const { id: paramId } = useParams<{ id?: string }>()
-  const { agents } = useStore()
+  const { agents, addUnreadDm, markDmRead, unreadDmChannels } = useStore()
   const [channels, setChannels] = useState<Channel[]>([])
+  const [dmChannels, setDmChannels] = useState<DmChannel[]>([])
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null)
   const [messages, setMessages] = useState<ChannelMessage[]>([])
   const [input, setInput] = useState('')
@@ -94,6 +95,7 @@ export default function Channels() {
   useEffect(() => {
     api.auth.me().then(setCurrentUser).catch(() => {})
     loadChannels()
+    loadDmChannels()
   }, [])
 
   useEffect(() => {
@@ -127,6 +129,16 @@ export default function Channels() {
 
   // Subscribe to WS channel:message events
   useAppEvents((event) => {
+    if (event.type === 'channel:message' && event.channelId !== activeChannel?.id) {
+      // Track unread DMs; reload list if this is a new DM channel we haven't seen
+      const isDm = dmChannels.some((d) => d.id === event.channelId)
+      if (isDm) {
+        addUnreadDm(event.channelId)
+      } else if (event.senderType === 'agent') {
+        // Could be a new DM channel — refresh the list
+        loadDmChannels().then(() => addUnreadDm(event.channelId))
+      }
+    }
     if (event.type === 'channel:message' && event.channelId === activeChannel?.id) {
       const incoming: ChannelMessage = {
         id: event.messageId,
@@ -158,6 +170,16 @@ export default function Channels() {
       const target = paramId ? list.find((c) => c.id === paramId) ?? list[0] : list[0]
       setActiveChannel(target)
     }
+  }
+
+  async function loadDmChannels() {
+    const list = await api.channels.listDms()
+    setDmChannels(list)
+  }
+
+  function openChannel(ch: Channel) {
+    setActiveChannel(ch)
+    if (ch.is_dm) markDmRead(ch.id)
   }
 
   async function loadMessages(channelId: string) {
@@ -373,7 +395,7 @@ export default function Channels() {
           {channels.map((ch) => (
             <button
               key={ch.id}
-              onClick={() => setActiveChannel(ch)}
+              onClick={() => openChannel(ch)}
               className={`w-full text-left flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
                 activeChannel?.id === ch.id ? 'bg-white/[0.08]' : 'hover:bg-white/5'
               }`}
@@ -383,6 +405,43 @@ export default function Channels() {
               <span className="truncate">{ch.name}</span>
             </button>
           ))}
+          {dmChannels.length > 0 && (
+            <>
+              <div
+                className="px-4 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: 'var(--muted)' }}
+              >
+                Direct Messages
+              </div>
+              {dmChannels.map((ch) => {
+                const hasUnread = unreadDmChannels.has(ch.id)
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => openChannel(ch)}
+                    className={`w-full text-left flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                      activeChannel?.id === ch.id ? 'bg-white/[0.08]' : 'hover:bg-white/5'
+                    }`}
+                    style={{ color: activeChannel?.id === ch.id ? 'var(--text-primary)' : 'var(--muted)' }}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] font-bold"
+                      style={{ background: ch.partner_avatar_color, color: '#fff' }}
+                    >
+                      {ch.partner_name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="truncate flex-1">{ch.partner_name}</span>
+                    {hasUnread && (
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ background: 'rgb(var(--accent))' }}
+                      />
+                    )}
+                  </button>
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
 
@@ -400,10 +459,35 @@ export default function Channels() {
                 borderBottom: '1px solid rgba(255,255,255,0.08)',
               }}
             >
-              <span className="text-muted text-sm">#</span>
-              <span className="text-sm font-semibold flex-1" style={{ color: 'var(--text-primary)' }}>
-                {activeChannel.name}
-              </span>
+              {activeChannel.is_dm ? (
+                <>
+                  {(() => {
+                    const dm = dmChannels.find((d) => d.id === activeChannel.id)
+                    return dm ? (
+                      <>
+                        <span
+                          className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
+                          style={{ background: dm.partner_avatar_color, color: '#fff' }}
+                        >
+                          {dm.partner_name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="text-sm font-semibold flex-1" style={{ color: 'var(--text-primary)' }}>
+                          {dm.partner_name}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-sm font-semibold flex-1" style={{ color: 'var(--text-primary)' }}>Direct Message</span>
+                    )
+                  })()}
+                </>
+              ) : (
+                <>
+                  <span className="text-muted text-sm">#</span>
+                  <span className="text-sm font-semibold flex-1" style={{ color: 'var(--text-primary)' }}>
+                    {activeChannel.name}
+                  </span>
+                </>
+              )}
 
               {/* Participant count button */}
               <div className="relative" ref={membersRef}>

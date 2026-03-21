@@ -92,6 +92,11 @@ export function createUsersRouter(): Router {
     if (!displayName?.trim()) return res.status(400).json({ error: 'displayName required' })
     if (!password) return res.status(400).json({ error: 'password required' })
 
+    if (isAdmin) {
+      const existingAdmin = getDb().prepare('SELECT id FROM users WHERE is_admin = 1').get()
+      if (existingAdmin) return res.status(409).json({ error: 'An admin already exists. The system only supports one admin.' })
+    }
+
     const existing = getDb()
       .prepare('SELECT id FROM users WHERE username = ?')
       .get(username.trim().toLowerCase())

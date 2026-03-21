@@ -8,7 +8,9 @@
 
 import fs from 'fs'
 import path from 'path'
+import { randomUUID } from 'crypto'
 import { Type } from '@sinclair/typebox'
+import { CronExpressionParser } from 'cron-parser'
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent'
 import { getDb, getAgentChannels, getRecentChannelMessages } from './db.js'
 import { pluginLoader } from './plugin-loader.js'
@@ -366,6 +368,118 @@ export function makeCreateAgentTool(): ToolDefinition {
   }
 }
 
+// ── DM helper ─────────────────────────────────────────────────────────────────
+
+function findOrCreateDmChannel(
+  db: ReturnType<typeof getDb>,
+  agentId: string,
+  userId: string,
+): string {
+  const existing = db.prepare(`
+    SELECT cm1.channel_id
+    FROM channel_members cm1
+    JOIN channel_members cm2 ON cm1.channel_id = cm2.channel_id
+    JOIN channels c ON c.id = cm1.channel_id
+    WHERE c.is_dm = 1
+      AND cm1.member_id = ? AND cm1.member_type = 'agent'
+      AND cm2.member_id = ? AND cm2.member_type = 'user'
+  `).get(agentId, userId) as { channel_id: string } | undefined
+
+  if (existing) return existing.channel_id
+
+  const channelId = randomUUID()
+  db.prepare("INSERT INTO channels (id, name, is_dm) VALUES (?, '', 1)").run(channelId)
+  db.prepare('INSERT INTO channel_members (channel_id, member_id, member_type) VALUES (?, ?, ?)').run(channelId, agentId, 'agent')
+  db.prepare('INSERT INTO channel_members (channel_id, member_id, member_type) VALUES (?, ?, ?)').run(channelId, userId, 'user')
+  return channelId
+}
+
+// ── Direct message tool ───────────────────────────────────────────────────────
+
+export function makeSendDirectMessageTool(agentId: string): ToolDefinition {
+  return {
+    name: 'send_direct_message',
+    label: 'Send Direct Message',
+    description:
+      'Send a direct message to a human user. Use this to proactively notify the workspace owner or a specific user about reports, alerts, or task completions. ' +
+      'You cannot message other AI agents with this tool. If no user_id is provided, defaults to the workspace owner/admin.',
+    parameters: Type.Object({
+      message: Type.String({ description: 'The message to send' }),
+      user_id: Type.Optional(Type.String({ description: 'Target user ID. Omit to send to workspace owner.' })),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const db = getDb()
+
+      let targetUserId: string = params.user_id
+      if (!targetUserId) {
+        const admin = db.prepare('SELECT id FROM users WHERE is_admin = 1').get() as { id: string } | undefined
+        if (!admin) throw new Error('No admin user found. Please complete setup.')
+        targetUserId = admin.id
+      }
+
+      const targetUser = db.prepare('SELECT id, display_name FROM users WHERE id = ?').get(targetUserId) as { id: string; display_name: string } | undefined
+      if (!targetUser) throw new Error(`User ${targetUserId} not found. Note: you can only message human users, not agents.`)
+
+      const channelId = findOrCreateDmChannel(db, agentId, targetUserId)
+
+      const result = db.prepare(
+        "INSERT INTO channel_messages (channel_id, sender_id, sender_type, content) VALUES (?, ?, 'agent', ?)"
+      ).run(channelId, agentId, params.message) as { lastInsertRowid: number | bigint }
+
+      const agent = db.prepare('SELECT name FROM agents WHERE id = ?').get(agentId) as { name: string }
+      const { eventBus } = await import('./event-bus.js')
+      eventBus.emit({
+        type: 'channel:message',
+        channelId,
+        senderId: agentId,
+        senderType: 'agent',
+        senderName: agent.name,
+        content: params.message,
+        messageId: result.lastInsertRowid as number,
+      })
+
+      return ok(JSON.stringify({ success: true, channel_id: channelId, message_id: result.lastInsertRowid }))
+    },
+  }
+}
+
+// ── Create schedule tool ──────────────────────────────────────────────────────
+
+export function makeCreateScheduleTool(agentId: string): ToolDefinition {
+  return {
+    name: 'create_schedule',
+    label: 'Create Schedule',
+    description:
+      'Create a recurring scheduled task for yourself. Use this to set up reports, reminders, or recurring actions on a cron schedule.',
+    parameters: Type.Object({
+      label: Type.String({ description: "A short name for this schedule, e.g. 'Daily report to admin'" }),
+      cron: Type.String({ description: "Cron expression, e.g. '0 11 * * *' for daily at 11am UTC" }),
+      prompt: Type.String({ description: 'The task instructions that will run on this schedule' }),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      let nextRun: Date
+      try {
+        nextRun = CronExpressionParser.parse(params.cron).next().toDate()
+      } catch {
+        throw new Error(`Invalid cron expression: "${params.cron}". Example: "0 11 * * *" for daily at 11am.`)
+      }
+
+      const db = getDb()
+      const result = db.prepare(`
+        INSERT INTO agent_schedules (agent_id, cron, prompt, label, enabled, next_run_at)
+        VALUES (?, ?, ?, ?, 1, ?)
+      `).run(agentId, params.cron, params.prompt, params.label, nextRun.toISOString()) as { lastInsertRowid: number | bigint }
+
+      const { eventBus } = await import('./event-bus.js')
+      eventBus.emit({ type: 'schedule:created', agentId, scheduleId: result.lastInsertRowid as number, label: params.label })
+
+      return ok(JSON.stringify({ success: true, schedule_id: result.lastInsertRowid, next_run_at: nextRun.toISOString() }))
+    },
+  }
+}
+
 // ── Channel tools ─────────────────────────────────────────────────────────────
 
 /** List the channels this agent is a member of. */
@@ -522,6 +636,8 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
   tools.push(makeChannelGetMessagesTool(ctx.agentId))
   tools.push(makeChannelPostTool(ctx.agentId))
   tools.push(makeCreateAgentTool())
+  tools.push(makeSendDirectMessageTool(ctx.agentId))
+  tools.push(makeCreateScheduleTool(ctx.agentId))
 
   return tools
 }

@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 import { getDb } from '../db.js'
-import { clearSession, buildSystemPrompt, resolveWorkspaceDir } from '../agent-runner.js'
+import { clearSession, buildSystemPrompt, resolveWorkspaceDir, resolveSessionsDir } from '../agent-runner.js'
 
 export interface AgentRow {
   id: string
@@ -147,6 +149,35 @@ export function createAgentsRouter(): Router {
     const workspaceDir = resolveWorkspaceDir()
     const prompt = buildSystemPrompt(agent, workspaceDir)
     res.json({ prompt })
+  })
+
+  // GET /api/agents/:id/sessions — list session files
+  router.get('/:id/sessions', (req, res) => {
+    const sessionsDir = resolveSessionsDir(req.params.id)
+    if (!fs.existsSync(sessionsDir)) return res.json([])
+    const files = fs.readdirSync(sessionsDir)
+      .filter(f => f.endsWith('.jsonl'))
+      .map(filename => {
+        const stat = fs.statSync(path.join(sessionsDir, filename))
+        return { filename, size: stat.size, mtime: stat.mtime.toISOString() }
+      })
+      .sort((a, b) => b.mtime.localeCompare(a.mtime))
+    res.json(files)
+  })
+
+  // GET /api/agents/:id/sessions/:filename — read a session file
+  router.get('/:id/sessions/:filename', (req, res) => {
+    const { filename } = req.params
+    if (filename.includes('/') || filename.includes('..') || !filename.endsWith('.jsonl')) {
+      return res.status(400).json({ error: 'Invalid filename' })
+    }
+    const filePath = path.join(resolveSessionsDir(req.params.id), filename)
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Session not found' })
+    const lines = fs.readFileSync(filePath, 'utf-8')
+      .split('\n')
+      .filter(Boolean)
+      .map(line => { try { return JSON.parse(line) } catch { return { type: 'raw', data: line } } })
+    res.json(lines)
   })
 
   // DELETE /api/agents/:id

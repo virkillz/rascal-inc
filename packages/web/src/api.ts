@@ -114,6 +114,14 @@ export const api = {
       req<{ ok: boolean }>('DELETE', `/agents/${agentId}/chat/${msgId}`),
   },
 
+  // ─── Sessions ─────────────────────────────────────────────────────────────
+
+  sessions: {
+    list: (agentId: string) => req<SessionFile[]>('GET', `/agents/${agentId}/sessions`),
+    read: (agentId: string, filename: string) =>
+      req<SessionEvent[]>('GET', `/agents/${agentId}/sessions/${encodeURIComponent(filename)}`),
+  },
+
   // ─── Memory ───────────────────────────────────────────────────────────────
 
   memory: {
@@ -240,6 +248,7 @@ export const api = {
 
   channels: {
     list: () => req<Channel[]>('GET', '/channels'),
+    listDms: () => req<DmChannel[]>('GET', '/channels/dms'),
     publicChannel: () => req<Channel>('GET', '/channels/public'),
     create: (name: string) => req<Channel>('POST', '/channels', { name }),
     delete: (id: string) => req<{ ok: boolean }>('DELETE', `/channels/${id}`),
@@ -317,6 +326,20 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   created_at: string
+}
+
+export interface SessionFile {
+  filename: string
+  size: number
+  mtime: string
+}
+
+export interface SessionEvent {
+  type: string
+  id?: string
+  parentId?: string | null
+  timestamp?: string
+  [key: string]: unknown
 }
 
 export interface MemoryEntry {
@@ -442,6 +465,13 @@ export interface Channel {
   name: string
   is_dm: number
   created_at: string
+}
+
+export interface DmChannel extends Channel {
+  partner_id: string
+  partner_name: string
+  partner_type: 'agent' | 'user'
+  partner_avatar_color: string
 }
 
 export interface ChannelMessage {

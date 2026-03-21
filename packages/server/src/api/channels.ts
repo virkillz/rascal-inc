@@ -96,6 +96,37 @@ async function triggerAgentResponse(
 export function createChannelsRouter(): Router {
   const router = Router()
 
+  // GET /api/channels/dms — list all DM channels the current user is a member of
+  router.get('/dms', requireAuth, (req: AuthRequest, res) => {
+    const userId = req.user!.id
+    const db = getDb()
+
+    const rows = db.prepare(`
+      SELECT c.id, c.name, c.is_dm, c.created_at,
+             cm_other.member_id AS partner_id, cm_other.member_type AS partner_type
+      FROM channels c
+      JOIN channel_members cm_me  ON cm_me.channel_id  = c.id AND cm_me.member_id  = ?
+      JOIN channel_members cm_other ON cm_other.channel_id = c.id AND cm_other.member_id != ?
+      WHERE c.is_dm = 1
+      ORDER BY c.created_at ASC
+    `).all(userId, userId) as { id: string; name: string; is_dm: number; created_at: string; partner_id: string; partner_type: string }[]
+
+    const enriched = rows.map((row) => {
+      let partner_name = row.partner_id
+      let partner_avatar_color = '#7c6af7'
+      if (row.partner_type === 'agent') {
+        const agent = db.prepare('SELECT name, avatar_color FROM agents WHERE id = ?').get(row.partner_id) as { name: string; avatar_color: string } | undefined
+        if (agent) { partner_name = agent.name; partner_avatar_color = agent.avatar_color }
+      } else {
+        const user = db.prepare('SELECT display_name, avatar_color FROM users WHERE id = ?').get(row.partner_id) as { display_name: string; avatar_color: string } | undefined
+        if (user) { partner_name = user.display_name; partner_avatar_color = user.avatar_color }
+      }
+      return { ...row, partner_name, partner_avatar_color }
+    })
+
+    res.json(enriched)
+  })
+
   // GET /api/channels — list all non-DM channels
   router.get('/', requireAuth, (_req, res) => {
     const channels = getDb()

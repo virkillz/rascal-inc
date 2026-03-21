@@ -13,8 +13,9 @@ import { PluginsSection } from '../components/agent-settings/PluginsSection.tsx'
 import { ScheduleSection } from '../components/agent-settings/ScheduleSection.tsx'
 import { PromptSection } from '../components/agent-settings/PromptSection.tsx'
 import { TerminateSection } from '../components/agent-settings/TerminateSection.tsx'
+import { SessionsSection } from '../components/agent-settings/SessionsSection.tsx'
 
-type Section = 'profile' | 'avatar' | 'model' | 'memory' | 'todos' | 'skills' | 'plugins' | 'schedule' | 'prompt' | 'terminate'
+type Section = 'profile' | 'avatar' | 'model' | 'memory' | 'todos' | 'skills' | 'plugins' | 'schedule' | 'prompt' | 'sessions' | 'terminate'
 
 const NAV_ITEMS: { id: Section; label: string; danger?: boolean }[] = [
   { id: 'profile', label: 'Profile' },
@@ -26,6 +27,7 @@ const NAV_ITEMS: { id: Section; label: string; danger?: boolean }[] = [
   { id: 'plugins', label: 'Plugins' },
   { id: 'schedule', label: 'Schedule' },
   { id: 'prompt', label: 'System Prompt' },
+  { id: 'sessions', label: 'Sessions' },
   { id: 'terminate', label: 'Terminate', danger: true },
 ]
 
@@ -174,6 +176,7 @@ export default function AgentSettings() {
         {section === 'plugins' && <PluginsSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
         {section === 'schedule' && id && <ScheduleSection agentId={id} />}
         {section === 'prompt' && id && <PromptSection agentId={id} />}
+        {section === 'sessions' && id && <SessionsSection agentId={id} />}
         {section === 'terminate' && id && <TerminateSection agent={agent} agentId={id} />}
       </div>
     </div>

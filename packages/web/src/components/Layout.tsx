@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ currentUser, onLogout }: LayoutProps) {
-  const { settings, agents, loadAgents, agentStatus } = useStore()
+  const { settings, agents, loadAgents, agentStatus, unreadDmChannels } = useStore()
   const { theme, toggle } = useTheme()
 
   useEffect(() => { loadAgents() }, [loadAgents])
@@ -165,7 +165,25 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
           <nav className="flex-1 py-3 overflow-y-auto">
             <div className="px-3 space-y-0.5">
               <GameNavLink to="/dashboard" icon={<DashboardIcon />} label="Dashboard" />
-              <GameNavLink to="/channels" icon={<MessagesIcon />} label="Messages" />
+              <NavLink
+                to="/channels"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all ${isActive ? '' : 'hover:bg-white/5'}`
+                }
+                style={({ isActive }) => ({
+                  color: isActive ? 'var(--text-primary)' : 'var(--subtle)',
+                  background: isActive ? 'rgba(245,158,11,0.12)' : undefined,
+                  borderLeft: `2px solid ${isActive ? 'rgb(var(--accent))' : 'transparent'}`,
+                })}
+              >
+                <span className="relative w-4 h-4 flex-shrink-0">
+                  <MessagesIcon />
+                  {unreadDmChannels.size > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full" style={{ background: 'rgb(var(--accent))' }} />
+                  )}
+                </span>
+                Messages
+              </NavLink>
               <GameNavLink to="/board" icon={<TasksIcon />} label="Tasks" />
               <GameNavLink to="/roster" icon={<EmployeesIcon />} label="Employees" />
               <GameNavLink to="/workspace" icon={<FilesIcon />} label="Workspace" />
