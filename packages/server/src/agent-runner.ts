@@ -188,7 +188,11 @@ export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): str
     `### Communication\n` +
     `You can proactively post messages to channels — don't wait to be mentioned. Use this to share updates, ask teammates for help, or announce completed work.\n` +
     `- channel_list — list channels you are a member of (use this if ## Channels is empty or to refresh)\n` +
+    `- channel_get_messages — fetch the last 10 messages from a channel by channelId\n` +
     `- channel_post — post a message to a channel by channelId\n\n` +
+    `### Hiring\n` +
+    `If a task requires a specialist that doesn't exist yet, you can hire a new agent.\n` +
+    `- create_agent — create a new agent with a name, role, description, and system prompt\n\n` +
     `### Personal Notes\n` +
     `To be a good employee, you must remember things. Whenever you learn something worth remembering — especially related to work — write it to memory. If your task requires multi-step work you intend to continue, use your todo list.\n` +
     `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +

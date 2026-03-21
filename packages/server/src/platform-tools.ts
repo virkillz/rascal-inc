@@ -10,7 +10,7 @@ import fs from 'fs'
 import path from 'path'
 import { Type } from '@sinclair/typebox'
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent'
-import { getDb, getAgentChannels } from './db.js'
+import { getDb, getAgentChannels, getRecentChannelMessages } from './db.js'
 import { pluginLoader } from './plugin-loader.js'
 
 // ── Result helper ─────────────────────────────────────────────────────────────
@@ -318,6 +318,54 @@ export function makeBoardMoveCardTool(agentId: string): ToolDefinition {
   }
 }
 
+// ── Agent creation tool ───────────────────────────────────────────────────────
+
+/** Hire (create) a new agent on the platform. */
+export function makeCreateAgentTool(): ToolDefinition {
+  return {
+    name: 'create_agent',
+    label: 'Hire Agent',
+    description:
+      'Create a new AI agent on the platform. Use this to hire a specialist for a specific role or task. ' +
+      'Returns the new agent\'s id, name, role, and description.',
+    parameters: Type.Object({
+      name: Type.String({ description: 'Agent name' }),
+      role: Type.String({ description: 'Agent role or job title (e.g. "Copywriter", "Data Analyst")' }),
+      description: Type.Optional(Type.String({ description: 'Short description of what this agent does' })),
+      systemPrompt: Type.Optional(Type.String({ description: 'System prompt / instructions for the agent' })),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const { randomUUID } = await import('crypto')
+      const db = getDb()
+      const AVATAR_COLORS = [
+        '#7c6af7', '#f76a6a', '#6af7a0', '#f7c46a',
+        '#6ac5f7', '#f76ac0', '#a0f76a', '#f7906a',
+      ]
+      const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
+      const avatarUrl = `/default_avatar/avatar_${Math.floor(Math.random() * 17) + 1}.jpg`
+      const agentId = randomUUID()
+      db.prepare(`
+        INSERT INTO agents (id, name, role, description, system_prompt, model_config, avatar_color, avatar_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        agentId,
+        params.name.trim(),
+        params.role.trim(),
+        params.description?.trim() ?? '',
+        params.systemPrompt?.trim() ?? '',
+        '{}',
+        avatarColor,
+        avatarUrl,
+      )
+      const { eventBus } = await import('./event-bus.js')
+      eventBus.emit({ type: 'agent:created', agentId })
+      const agent = db.prepare('SELECT id, name, role, description FROM agents WHERE id = ?').get(agentId)
+      return ok(JSON.stringify(agent, null, 2))
+    },
+  }
+}
+
 // ── Channel tools ─────────────────────────────────────────────────────────────
 
 /** List the channels this agent is a member of. */
@@ -333,6 +381,31 @@ export function makeChannelListTool(agentId: string): ToolDefinition {
       const channels = getAgentChannels(agentId)
       if (!channels.length) return ok('You are not a member of any channels.')
       return ok(JSON.stringify(channels, null, 2))
+    },
+  }
+}
+
+/** Fetch the last N messages from a channel. */
+export function makeChannelGetMessagesTool(agentId: string): ToolDefinition {
+  return {
+    name: 'channel_get_messages',
+    label: 'Get Channel Messages',
+    description:
+      'Fetch the last 10 messages from a channel you are a member of. ' +
+      'Use channel_list to get channel IDs.',
+    parameters: Type.Object({
+      channelId: Type.String({ description: 'ID of the channel to read' }),
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: async (_id, params: any) => {
+      const db = getDb()
+      const membership = db
+        .prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND member_id = ?')
+        .get(params.channelId, agentId)
+      if (!membership) throw new Error('You are not a member of that channel.')
+      const messages = getRecentChannelMessages(params.channelId, 10).reverse()
+      if (!messages.length) return ok('No messages yet.')
+      return ok(JSON.stringify(messages, null, 2))
     },
   }
 }
@@ -446,7 +519,9 @@ export function buildAgentTools(toolIds: string[], ctx: ToolContext): ToolDefini
   tools.push(makeBoardUpdateCardTool(ctx.agentId))
   tools.push(makeBoardMoveCardTool(ctx.agentId))
   tools.push(makeChannelListTool(ctx.agentId))
+  tools.push(makeChannelGetMessagesTool(ctx.agentId))
   tools.push(makeChannelPostTool(ctx.agentId))
+  tools.push(makeCreateAgentTool())
 
   return tools
 }

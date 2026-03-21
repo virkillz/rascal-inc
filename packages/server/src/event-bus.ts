@@ -3,6 +3,7 @@ import type { MemoryRow, TodoRow } from './db.js'
 export type AppEvent =
   | { type: 'connected' }
   // ── Agent events ─────────────────────────────────────────────────────────────
+  | { type: 'agent:created'; agentId: string }
   | { type: 'agent:thinking'; agentId: string }
   | { type: 'agent:reply'; agentId: string; preview: string }
   | { type: 'agent:idle'; agentId: string }
