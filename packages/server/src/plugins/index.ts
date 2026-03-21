@@ -12,8 +12,10 @@ import { elevenlabsPlugin } from './elevenlabs/index.js'
 import { geminiImagePlugin } from './gemini-image/index.js'
 import { youtubePlugin } from './youtube/index.js'
 import { remotionPlugin } from './remotion/index.js'
+import { hackernewsPlugin } from './hackernews/index.js'
+import { fetchContentPlugin } from './fetch-content/index.js'
 
-export { braveSearchPlugin, elevenlabsPlugin, geminiImagePlugin, youtubePlugin, remotionPlugin }
+export { braveSearchPlugin, elevenlabsPlugin, geminiImagePlugin, youtubePlugin, remotionPlugin, hackernewsPlugin, fetchContentPlugin }
 
 export const builtInPlugins = [
   braveSearchPlugin,
@@ -21,4 +23,6 @@ export const builtInPlugins = [
   geminiImagePlugin,
   youtubePlugin,
   remotionPlugin,
+  hackernewsPlugin,
+  fetchContentPlugin,
 ]

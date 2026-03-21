@@ -1,7 +1,7 @@
 import { CronExpressionParser } from 'cron-parser'
 import chalk from 'chalk'
-import { getDb, getSetting, getAgentTodos, getPublicChannelId, getRecentChannelMessages, type ScheduleRow } from './db.js'
-import { chatWithAgent, isDebugMode, type AgentRecord, type ModelConfig } from './agent-runner.js'
+import { getDb, getSetting, getAgentTodos, type ScheduleRow } from './db.js'
+import { runScheduledTask, isDebugMode, type AgentRecord, type ModelConfig } from './agent-runner.js'
 import { eventBus } from './event-bus.js'
 
 function computeNextRun(cron: string): string {
@@ -18,25 +18,8 @@ function getDefaultModel(): ModelConfig {
   return { provider: 'openrouter', modelId: 'moonshotai/kimi-k2.5', thinkingLevel: 'low' }
 }
 
-function buildSchedulerPrompt(schedule: ScheduleRow, _agentName: string): string {
-  // Include recent #public channel history so the agent has company context
-  let channelContext = ''
-  try {
-    const channelId = getPublicChannelId()
-    const messages = getRecentChannelMessages(channelId, 30)
-    if (messages.length > 0) {
-      const db = getDb()
-      const lines = messages.map((m) => {
-        const name = m.sender_type === 'agent'
-          ? (db.prepare('SELECT name FROM agents WHERE id = ?').get(m.sender_id) as { name: string } | undefined)?.name ?? m.sender_id
-          : (db.prepare('SELECT display_name FROM users WHERE id = ?').get(m.sender_id) as { display_name: string } | undefined)?.display_name ?? m.sender_id
-        return `${name}: ${m.content}`
-      })
-      channelContext = `## Recent company channel activity\n${lines.join('\n')}\n\n`
-    }
-  } catch { /* no channel yet */ }
-
-  return `${channelContext}[Scheduled task — ${schedule.label || schedule.cron}]\n${schedule.prompt}`
+export function buildSchedulerPrompt(schedule: ScheduleRow): string {
+  return schedule.prompt
 }
 
 export function startScheduler(): void {
@@ -92,7 +75,7 @@ export function startScheduler(): void {
 
       eventBus.emit({ type: 'schedule:fired', agentId: s.agent_id, scheduleId: s.id, label: s.label })
 
-      const triggerMsg = buildSchedulerPrompt(s, agent.name)
+      const triggerMsg = buildSchedulerPrompt(s)
 
       if (isDebugMode()) {
         const label = s.label || s.cron
@@ -100,7 +83,7 @@ export function startScheduler(): void {
         console.log(chalk.cyan(`[debug][scheduler]`), chalk.dim('prompt:\n') + triggerMsg)
       }
 
-      chatWithAgent(agent, triggerMsg, getDefaultModel())
+      runScheduledTask(agent, triggerMsg, getDefaultModel())
         .catch(console.error)
     }
   }, 60_000)

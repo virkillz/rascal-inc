@@ -212,6 +212,7 @@ function resolveModelConfig(modelConfigJson: string, defaultConfig: ModelConfig)
 async function createLiveSession(
   agent: AgentRecord,
   defaultModel: ModelConfig,
+  systemPromptOverride?: string,
 ): Promise<LiveSession> {
   const config = resolveModelConfig(agent.model_config, defaultModel)
 
@@ -221,7 +222,7 @@ async function createLiveSession(
 
   const workspaceDir = resolveWorkspaceDir()
   ensureSopFile(workspaceDir)
-  const systemPrompt = buildSystemPrompt(agent, workspaceDir)
+  const systemPrompt = systemPromptOverride ?? buildSystemPrompt(agent, workspaceDir)
   if (debugMode) {
     dbg(agent.name, chalk.bold('── NEW SESSION ──'))
     dbg(agent.name, chalk.dim('system prompt:\n') + systemPrompt)
@@ -377,4 +378,56 @@ export function clearSession(agentId: string): void {
   const live = liveSessions.get(agentId)
   if (live?.unsubscribe) live.unsubscribe()
   liveSessions.delete(agentId)
+}
+
+/**
+ * Run a scheduled task in a fresh, isolated session that is never stored in
+ * liveSessions.  The full context is: buildSystemPrompt + the task message.
+ */
+export async function runScheduledTask(
+  agent: AgentRecord,
+  taskPrompt: string,
+  defaultModel: ModelConfig,
+): Promise<string> {
+  const workspaceDir = resolveWorkspaceDir()
+  ensureSopFile(workspaceDir)
+  const systemPrompt = buildSystemPrompt(agent, workspaceDir)
+  const userMessage = `------------------------\nNow your current task is:\n${taskPrompt}`
+
+  const live = await createLiveSession(agent, defaultModel, systemPrompt)
+
+  if (debugMode) {
+    dbg(agent.name, chalk.bold('── SCHEDULED TASK ──'))
+    dbg(agent.name, chalk.dim('task:\n') + userMessage)
+  }
+
+  return new Promise((resolve, reject) => {
+    const chunks: string[] = []
+    const unsubscribe = live.session.subscribe((event: AgentSessionEvent) => {
+      if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
+        chunks.push(event.assistantMessageEvent.delta)
+        if (chunks.length === 1) {
+          eventBus.emit({ type: 'agent:reply', agentId: agent.id, preview: chunks[0].slice(0, 80) })
+        }
+      }
+    })
+
+    eventBus.emit({ type: 'agent:thinking', agentId: agent.id })
+
+    live.session.prompt(userMessage, { streamingBehavior: 'followUp' })
+      .then(() => live.session.agent.waitForIdle())
+      .then(() => {
+        if (typeof unsubscribe === 'function') unsubscribe()
+        if (live.unsubscribe) live.unsubscribe()
+        eventBus.emit({ type: 'agent:idle', agentId: agent.id })
+        resolve(chunks.join(''))
+      })
+      .catch((err: unknown) => {
+        if (typeof unsubscribe === 'function') unsubscribe()
+        if (live.unsubscribe) live.unsubscribe()
+        const msg = err instanceof Error ? err.message : String(err)
+        eventBus.emit({ type: 'agent:error', agentId: agent.id, error: msg })
+        reject(err)
+      })
+  })
 }

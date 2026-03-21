@@ -365,8 +365,8 @@ You can read and modify source files to help with bug fixes, new features, and p
       ).run(
         agentId,
         '*/15 * * * *',
-        'Check the group chat, and decide if you want to post something. You can decide to post or not.',
-        'Group chat monitoring',
+        'Check the public channel, and decide if you want to post something. You can decide to post or not.',
+        'Public channel monitoring',
       )
     }
   }

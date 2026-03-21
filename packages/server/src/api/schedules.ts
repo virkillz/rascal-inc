@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { CronExpressionParser } from 'cron-parser'
 import { getDb, type ScheduleRow } from '../db.js'
+import { buildSystemPrompt, resolveWorkspaceDir, type AgentRecord } from '../agent-runner.js'
 
 function computeNextRun(cron: string): string {
   return CronExpressionParser.parse(cron).next().toDate().toISOString()
@@ -81,6 +82,22 @@ export function createSchedulesRouter(): Router {
       .prepare('SELECT * FROM agent_schedules WHERE id = ?')
       .get(req.params.sid) as unknown as ScheduleRow
     res.json(row)
+  })
+
+  // GET /api/agents/:id/schedules/:sid/preview
+  router.get('/:id/schedules/:sid/preview', (req, res) => {
+    const db = getDb()
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id) as unknown as AgentRecord | undefined
+    const row = db
+      .prepare('SELECT * FROM agent_schedules WHERE id = ? AND agent_id = ?')
+      .get(req.params.sid, req.params.id) as unknown as ScheduleRow | undefined
+    if (!agent || !row) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+    const systemPrompt = buildSystemPrompt(agent, resolveWorkspaceDir())
+    const prompt = `${systemPrompt}\n\n------------------------\nNow your current task is:\n${row.prompt}`
+    res.json({ prompt })
   })
 
   // DELETE /api/agents/:id/schedules/:sid

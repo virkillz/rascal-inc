@@ -148,6 +148,8 @@ export const api = {
       req<Schedule>('PATCH', `/agents/${agentId}/schedules/${id}`, data),
     delete: (agentId: string, id: number) =>
       req<{ ok: boolean }>('DELETE', `/agents/${agentId}/schedules/${id}`),
+    previewPrompt: (agentId: string, id: number) =>
+      req<{ prompt: string }>('GET', `/agents/${agentId}/schedules/${id}/preview`),
   },
 
   // ─── Workspace ────────────────────────────────────────────────────────────

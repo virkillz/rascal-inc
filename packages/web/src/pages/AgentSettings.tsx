@@ -1313,7 +1313,7 @@ function ScheduleSection({ agentId }: { agentId: string }) {
                             setPreviewSchedule(s)
                             setPreviewCombinedPrompt(null)
                             setPreviewLoading(true)
-                            api.agents.previewPrompt(agentId)
+                            api.schedules.previewPrompt(agentId, s.id)
                               .then((r) => setPreviewCombinedPrompt(r.prompt))
                               .finally(() => setPreviewLoading(false))
                           }}
@@ -1424,7 +1424,7 @@ function ScheduleSection({ agentId }: { agentId: string }) {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Combined system prompt
+                Trigger message
               </h3>
               {previewSchedule.label && (
                 <p className="text-xs text-muted mt-0.5">{previewSchedule.label}</p>
