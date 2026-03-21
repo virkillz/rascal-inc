@@ -268,10 +268,19 @@ function runMigrations(db: DB): void {
 
 function seedInitialData(db: DB): void {
   // Seed #public channel if not present
-  const publicChannel = db.prepare("SELECT id FROM channels WHERE name = 'public'").get()
+  let publicChannel = db.prepare("SELECT id FROM channels WHERE name = 'public'").get() as { id: string } | undefined
   if (!publicChannel) {
-    db.prepare("INSERT INTO channels (id, name, is_dm) VALUES (?, 'public', 0)")
-      .run(randomUUID())
+    const channelId = randomUUID()
+    db.prepare("INSERT INTO channels (id, name, is_dm) VALUES (?, 'public', 0)").run(channelId)
+    publicChannel = { id: channelId }
+  }
+
+  // Ensure Fabiana and Clive are members of the public channel
+  const defaultAgents = db.prepare("SELECT id FROM agents WHERE name IN ('Fabiana', 'Clive')").all() as { id: string }[]
+  for (const agent of defaultAgents) {
+    db.prepare(
+      "INSERT OR IGNORE INTO channel_members (channel_id, member_id, member_type) VALUES (?, ?, 'agent')"
+    ).run(publicChannel.id, agent.id)
   }
 
   // Seed default board if none exist
