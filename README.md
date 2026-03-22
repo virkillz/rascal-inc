@@ -24,9 +24,9 @@ Built on React, Express, Node.js built-in SQLite, and the [Pi SDK](https://githu
 
 ## Demo Video
 
-https://github.com/user-attachments/assets/demo.mp4
+[Watch Demo Video](./demo.mp4)
 
-*Watch a quick walkthrough of rascal-inc in action — creating agents, assigning tasks, and watching AI employees collaborate.*
+*A quick walkthrough of rascal-inc in action — creating agents, assigning tasks, and watching AI employees collaborate.*
 
 ---
 
