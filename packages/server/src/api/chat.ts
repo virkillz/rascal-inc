@@ -67,6 +67,7 @@ export function createChatRouter(): Router {
       res.json({ reply })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[chat] Error for agent ${agent.name} (${agent.id}):`, err)
       res.status(500).json({ error: msg })
     }
   })

@@ -15,7 +15,13 @@ export function useAppEvents(handler: (event: AppEvent) => void): void {
     ws.onerror = () => {}
     ws.onclose = () => {}
 
-    return () => ws.close()
+    return () => {
+      if (ws.readyState === WebSocket.CONNECTING) {
+        ws.addEventListener('open', () => ws.close())
+      } else if (ws.readyState === WebSocket.OPEN) {
+        ws.close()
+      }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 }

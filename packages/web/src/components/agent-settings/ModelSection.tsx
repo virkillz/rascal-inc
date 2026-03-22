@@ -65,8 +65,8 @@ export function ModelSection({
   async function handleSave() {
     setSaving(true)
     try {
-      const modelConfig = useCustom ? { provider, modelId, thinkingLevel } : {}
-      await onSave({ modelConfig })
+      const modelConfig = useCustom ? { provider, modelId, thinkingLevel } : undefined
+      await onSave({ modelConfig: modelConfig as any })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } finally {

@@ -25,7 +25,11 @@ export function broadcast(event: WsEvent): void {
   const payload = JSON.stringify(event)
   for (const client of wss.clients) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(payload)
+      try {
+        client.send(payload)
+      } catch (err) {
+        // Ignore EPIPE and other send errors for disconnected clients
+      }
     }
   }
 }

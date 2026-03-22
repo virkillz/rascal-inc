@@ -198,7 +198,31 @@ async function createLiveSession(
   const config = resolveModelConfig(agent.model_config, defaultModel)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = getModel(config.provider as any, config.modelId as any)
+  let model = getModel(config.provider as any, config.modelId as any)
+  
+  // Fallback: if model not found in registry but provider is openrouter, create custom model
+  if (!model && config.provider === 'openrouter') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    model = {
+      id: config.modelId,
+      name: config.modelId,
+      api: 'openai-completions',
+      provider: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      reasoning: false,
+      input: ['text'],
+      cost: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      },
+      contextWindow: 128000,
+      maxTokens: 16000,
+    } as any
+    console.log(`[agent-runner] Using custom OpenRouter model: ${config.modelId}`)
+  }
+  
   if (!model) throw new Error(`Model not found: ${config.provider}/${config.modelId}`)
 
   const workspaceDir = resolveWorkspaceDir()
