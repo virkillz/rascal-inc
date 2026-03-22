@@ -20,6 +20,9 @@ import { createBoardsRouter } from './api/boards.js'
 import { createChannelsRouter } from './api/channels.js'
 import { createSkillsRouter } from './api/skills.js'
 import { createPlatformToolsRouter } from './api/platform-tools.js'
+import { createNotificationsRouter } from './api/notifications.js'
+import { createNotification } from './notification-service.js'
+import { getDb } from './db.js'
 
 export function createApp(opts: { webDistDir?: string; workspaceDir?: string; dataDir?: string } = {}) {
   const app = express()
@@ -55,6 +58,7 @@ export function createApp(opts: { webDistDir?: string; workspaceDir?: string; da
   app.use('/api/roles', createRolesRouter())
   app.use('/api/boards', createBoardsRouter())
   app.use('/api/channels', createChannelsRouter())
+  app.use('/api/notifications', createNotificationsRouter())
 
   // Health check
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
@@ -75,6 +79,26 @@ export function startServer(port: number, webDistDir?: string, workspaceDir?: st
   const server = createServer(app)
   initWss(server)
   eventBus.on((event) => broadcast(event))
+
+  // Map domain events → persistent notifications for all human users
+  eventBus.on((event) => {
+    function agentName(agentId: string): string {
+      const row = getDb().prepare('SELECT name FROM agents WHERE id = ?').get(agentId) as { name: string } | undefined
+      return row?.name ?? agentId
+    }
+
+    if (event.type === 'agent:error') {
+      createNotification({ type: 'error', message: `${agentName(event.agentId)}: ${event.error}`, sourceEvent: 'agent:error', meta: { agentId: event.agentId } })
+    } else if (event.type === 'agent:idle') {
+      createNotification({ type: 'agent', message: `${agentName(event.agentId)} finished`, sourceEvent: 'agent:idle', meta: { agentId: event.agentId } })
+    } else if (event.type === 'schedule:fired') {
+      createNotification({ type: 'schedule', message: `Schedule fired for ${agentName(event.agentId)}: ${event.label || 'unnamed'}`, sourceEvent: 'schedule:fired', meta: { agentId: event.agentId, scheduleId: event.scheduleId } })
+    } else if (event.type === 'schedule:created') {
+      createNotification({ type: 'schedule', message: `${agentName(event.agentId)} created schedule: ${event.label || 'unnamed'}`, sourceEvent: 'schedule:created', meta: { agentId: event.agentId, scheduleId: event.scheduleId } })
+    } else if (event.type === 'board:card_moved') {
+      createNotification({ type: 'board', message: `Card moved: "${event.title}"`, sourceEvent: 'board:card_moved', meta: { cardId: event.cardId, boardId: event.boardId, laneId: event.laneId } })
+    }
+  })
 
   server.listen(port, () => {
     console.log(`  Server running at http://localhost:${port}`)

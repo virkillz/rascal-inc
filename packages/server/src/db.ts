@@ -200,6 +200,26 @@ function runMigrations(db: DB): void {
     );
     CREATE INDEX IF NOT EXISTS idx_card_events_card ON card_events(card_id, created_at);
 
+    -- ── Notifications ─────────────────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id           TEXT PRIMARY KEY,
+      type         TEXT NOT NULL,
+      message      TEXT NOT NULL,
+      source_event TEXT NOT NULL DEFAULT '',
+      meta         TEXT NOT NULL DEFAULT '{}',
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+
+    -- Per-user read state. A missing row means unread.
+    CREATE TABLE IF NOT EXISTS notification_reads (
+      notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+      user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      read_at         TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (notification_id, user_id)
+    );
+
     -- ── Auth sessions ────────────────────────────────────────────────────────
 
     CREATE TABLE IF NOT EXISTS sessions (
@@ -517,6 +537,15 @@ export interface PluginRow {
   display_name: string
   description: string
   configured: number
+}
+
+export interface NotificationRow {
+  id: string
+  type: 'agent' | 'board' | 'schedule' | 'error' | 'dm'
+  message: string
+  source_event: string
+  meta: string
+  created_at: string
 }
 
 // ── Query helpers ─────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store.ts'
 import { useTheme } from '../contexts/ThemeContext.tsx'
 import { api, type User } from '../api.ts'
+import NotificationCenter from './NotificationCenter.tsx'
 
 interface LayoutProps {
   currentUser: User | null
@@ -87,6 +88,10 @@ export default function Layout({ currentUser, onLogout }: LayoutProps) {
           >
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
+
+          <div className="ml-2">
+            <NotificationCenter />
+          </div>
 
           {/* User avatar dropdown */}
           <div className="relative ml-3" ref={userMenuRef}>

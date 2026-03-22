@@ -1,4 +1,4 @@
-import type { MemoryRow, TodoRow } from './db.js'
+import type { MemoryRow, NotificationRow, TodoRow } from './db.js'
 
 export type AppEvent =
   | { type: 'connected' }
@@ -24,6 +24,8 @@ export type AppEvent =
   | { type: 'channel:message'; channelId: string; senderId: string; senderType: string; senderName: string; content: string; messageId: number }
   // ── Chat events ───────────────────────────────────────────────────────────────
   | { type: 'chat:message'; agentId: string; agentName: string; role: 'assistant'; content: string; messageId: number }
+  // ── Notification events ───────────────────────────────────────────────────────
+  | { type: 'notification:created'; notification: NotificationRow }
 
 type Handler = (event: AppEvent) => void
 

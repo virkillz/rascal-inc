@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import {
   api,
   type Agent,
+  type Notification,
   type Settings,
   type Provider,
   type MemoryEntry,
@@ -52,6 +53,14 @@ interface AppState {
   patchSchedule: (agentId: string, id: number, data: Partial<Pick<Schedule, 'cron' | 'prompt' | 'label' | 'enabled'>>) => Promise<void>
   deleteSchedule: (agentId: string, id: number) => Promise<void>
 
+  // Notifications
+  notifications: Notification[]
+  notificationsLoaded: boolean
+  loadNotifications: () => Promise<void>
+  prependNotification: (n: Notification) => void
+  markNotificationRead: (id: string) => Promise<void>
+  markAllNotificationsRead: () => Promise<void>
+
   // Unread DM channels (set of channel IDs with unread messages)
   unreadDmChannels: Set<string>
   addUnreadDm: (channelId: string) => void
@@ -77,6 +86,8 @@ export const useStore = create<AppState>((set, get) => ({
   memory: {},
   todos: {},
   schedules: {},
+  notifications: [],
+  notificationsLoaded: false,
   unreadDmChannels: new Set<string>(),
   workspaceFiles: [],
   plugins: [],
@@ -228,6 +239,31 @@ export const useStore = create<AppState>((set, get) => ({
         ...s.schedules,
         [agentId]: (s.schedules[agentId] ?? []).filter((sc) => sc.id !== id),
       },
+    }))
+  },
+
+  // ─── Notifications ──────────────────────────────────────────────────────────
+
+  loadNotifications: async () => {
+    const items = await api.notifications.list()
+    set({ notifications: items, notificationsLoaded: true })
+  },
+
+  prependNotification: (n) => {
+    set((s) => ({ notifications: [n, ...s.notifications] }))
+  },
+
+  markNotificationRead: async (id) => {
+    await api.notifications.markRead(id)
+    set((s) => ({
+      notifications: s.notifications.map((n) => n.id === id ? { ...n, is_read: true } : n),
+    }))
+  },
+
+  markAllNotificationsRead: async () => {
+    await api.notifications.markAllRead()
+    set((s) => ({
+      notifications: s.notifications.map((n) => ({ ...n, is_read: true })),
     }))
   },
 

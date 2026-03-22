@@ -250,6 +250,17 @@ export const api = {
       req<Card[]>('GET', `/boards/${boardId}/archived-cards`),
   },
 
+  // ─── Notifications ────────────────────────────────────────────────────────
+
+  notifications: {
+    list: (limit = 50, offset = 0) =>
+      req<Notification[]>('GET', `/notifications?limit=${limit}&offset=${offset}`),
+    markRead: (id: string) =>
+      req<{ ok: boolean }>('POST', `/notifications/${id}/read`),
+    markAllRead: () =>
+      req<{ ok: boolean }>('POST', '/notifications/read-all'),
+  },
+
   // ─── Channels ─────────────────────────────────────────────────────────────
 
   channels: {
@@ -500,4 +511,14 @@ export interface ChannelMessage {
   sender_type: 'agent' | 'user'
   content: string
   created_at: string
+}
+
+export interface Notification {
+  id: string
+  type: 'agent' | 'board' | 'schedule' | 'error' | 'dm'
+  message: string
+  source_event: string
+  meta: string
+  created_at: string
+  is_read: boolean
 }

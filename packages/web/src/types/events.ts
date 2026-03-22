@@ -21,3 +21,5 @@ export type AppEvent =
   | { type: 'channel:message'; channelId: string; senderId: string; senderType: string; senderName: string; content: string; messageId: number }
   // ── Chat events ───────────────────────────────────────────────────────────────
   | { type: 'chat:message'; agentId: string; agentName: string; role: 'assistant'; content: string; messageId: number }
+  // ── Notification events ───────────────────────────────────────────────────────
+  | { type: 'notification:created'; notification: { id: string; type: string; message: string; source_event: string; meta: string; created_at: string } }

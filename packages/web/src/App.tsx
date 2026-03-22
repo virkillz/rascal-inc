@@ -21,6 +21,7 @@ import Workspace from './pages/Workspace.tsx'
 import Board from './pages/Board.tsx'
 import Channels from './pages/Channels.tsx'
 import Dashboard from './pages/Dashboard.tsx'
+import Notifications from './pages/Notifications.tsx'
 import Layout from './components/Layout.tsx'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated'
@@ -120,6 +121,7 @@ export default function App() {
             <Route path="/agents/:id" element={<AgentChat />} />
             <Route path="/agents/:id/settings" element={<AgentSettings />} />
             <Route path="/workspace" element={<Workspace />} />
+            <Route path="/notifications" element={<Notifications />} />
             <Route path="/settings" element={<Settings />}>
               <Route index element={<Navigate to="/settings/company" replace />} />
               <Route path="company" element={<SettingsCompany />} />

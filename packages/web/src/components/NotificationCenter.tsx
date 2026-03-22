@@ -1,99 +1,117 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAppEvents } from '../hooks/useAppEvents.ts'
 import { useStore } from '../store.ts'
-
-interface Notification {
-  id: string
-  message: string
-  type: 'agent' | 'board' | 'schedule' | 'error' | 'dm'
-  at: Date
-}
-
-let _idCounter = 0
-function nextId() { return String(++_idCounter) }
+import type { Notification as AppNotification } from '../api.ts'
 
 export default function NotificationCenter() {
-  const { agents, loadSchedules } = useStore()
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const {
+    notifications, notificationsLoaded,
+    loadNotifications, prependNotification,
+    markAllNotificationsRead, loadSchedules,
+  } = useStore()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  function agentName(id: string) {
-    return agents.find((a) => a.id === id)?.name ?? id
-  }
-
-  function push(n: Omit<Notification, 'id' | 'at'>) {
-    setNotifications((prev) => [{ ...n, id: nextId(), at: new Date() }, ...prev].slice(0, 30))
-  }
+  useEffect(() => {
+    if (!notificationsLoaded) loadNotifications()
+  }, [notificationsLoaded, loadNotifications])
 
   useAppEvents((event) => {
-    if (event.type === 'agent:error') {
-      push({ message: `${agentName(event.agentId)}: ${event.error}`, type: 'error' })
-    } else if (event.type === 'schedule:fired') {
-      push({ message: `Schedule fired for ${agentName(event.agentId)}: ${event.label || 'unnamed'}`, type: 'schedule' })
+    if (event.type === 'notification:created') {
+      prependNotification({ ...(event.notification as unknown as AppNotification), is_read: false })
     } else if (event.type === 'schedule:created') {
       loadSchedules(event.agentId)
-      push({ message: `${agentName(event.agentId)} created schedule: ${event.label || 'unnamed'}`, type: 'schedule' })
-    } else if (event.type === 'board:card_moved') {
-      push({ message: `Card moved: "${event.title}"`, type: 'board' })
-    } else if (event.type === 'chat:message') {
-      push({ message: `${event.agentName}: ${event.content}`, type: 'dm' })
     }
   })
 
-  // Close on outside click
-  useRef(() => {
+  useEffect(() => {
+    if (!open) return
     function onClickOut(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', onClickOut)
     return () => document.removeEventListener('mousedown', onClickOut)
-  })
+  }, [open])
 
-  const unread = notifications.length
+  const unread = notifications.filter((n) => !n.is_read).length
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative w-8 h-8 rounded-lg hover:bg-surface-2 flex items-center justify-center transition-colors"
+        className="relative w-7 h-7 rounded flex items-center justify-center transition-colors hover:bg-surface-3"
         style={{ color: 'var(--muted)' }}
         title="Notifications"
       >
         <BellIcon />
         {unread > 0 && (
-          <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-accent text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+          <span
+            className="absolute top-0.5 right-0.5 w-3.5 h-3.5 text-white text-[9px] font-bold rounded-full flex items-center justify-center"
+            style={{ background: 'rgb(var(--accent))' }}
+          >
             {Math.min(unread, 9)}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 bottom-full mb-2 w-72 bg-surface-1 border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+        <div
+          className="absolute right-0 top-full mt-2 w-80 rounded-xl overflow-hidden z-50"
+          style={{ background: 'rgb(16, 32, 60)', border: '1px solid rgba(255,255,255,0.14)', boxShadow: '0 12px 32px rgba(0,0,0,0.7)' }}
+        >
+          <div
+            className="px-4 py-2.5 flex items-center justify-between"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+          >
             <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
-            {notifications.length > 0 && (
+            {unread > 0 && (
               <button
-                onClick={() => setNotifications([])}
-                className="text-[10px] text-muted hover:text-accent transition-colors"
+                onClick={() => markAllNotificationsRead()}
+                className="text-[10px] transition-colors"
+                style={{ color: 'var(--muted)' }}
               >
-                Clear all
+                Mark all read
               </button>
             )}
           </div>
-          <div className="max-h-64 overflow-y-auto">
+
+          <div className="max-h-72 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="text-xs text-muted text-center py-6">No notifications</p>
+              <p className="text-xs text-center py-6" style={{ color: 'var(--muted)' }}>No notifications</p>
             ) : (
               notifications.map((n) => (
-                <div key={n.id} className="px-4 py-2.5 border-b border-border last:border-0">
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
-                  <p className="text-[10px] text-muted mt-0.5">
-                    {n.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                <div
+                  key={n.id}
+                  className="px-4 py-2.5 flex items-start gap-2"
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', opacity: n.is_read ? 0.5 : 1 }}
+                >
+                  {!n.is_read && (
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5"
+                      style={{ background: 'rgb(var(--accent))' }}
+                    />
+                  )}
+                  <div className={!n.is_read ? '' : 'pl-3.5'}>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>
+                      {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
                 </div>
               ))
             )}
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <Link
+              to="/notifications"
+              onClick={() => setOpen(false)}
+              className="block text-center text-xs py-2.5 transition-colors hover:bg-white/5"
+              style={{ color: 'rgb(var(--accent))' }}
+            >
+              View all notifications
+            </Link>
           </div>
         </div>
       )}
