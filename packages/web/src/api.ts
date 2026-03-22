@@ -207,6 +207,12 @@ export const api = {
     removeConfigure: (id: string) => req<{ ok: boolean }>('DELETE', `/plugins/${id}/configure`),
   },
 
+  // ─── Platform Tools ───────────────────────────────────────────────────────
+
+  platformTools: {
+    list: () => req<PlatformToolGroup[]>('GET', '/platform-tools'),
+  },
+
   // ─── Boards ───────────────────────────────────────────────────────────────
 
   boards: {
@@ -300,7 +306,7 @@ export interface Agent {
   description: string
   system_prompt: string
   model_config: string
-  modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string; allowedSkills?: string[]; tools?: string[] }
+  modelConfig: { provider?: string; modelId?: string; thinkingLevel?: string; allowedSkills?: string[]; tools?: string[]; disabledTools?: string[] }
   source: string
   avatar_color: string
   avatar_url: string
@@ -402,6 +408,19 @@ export interface Plugin {
   envVars: PluginEnvVar[]
   hasAllRequired: boolean
   toolIds: string[]
+}
+
+export interface PlatformToolEntry {
+  id: string
+  displayName: string
+  availableByDefault: boolean
+}
+
+export interface PlatformToolGroup {
+  id: string
+  displayName: string
+  description: string
+  tools: PlatformToolEntry[]
 }
 
 export interface Board {

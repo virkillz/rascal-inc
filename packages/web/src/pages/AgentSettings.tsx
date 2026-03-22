@@ -8,17 +8,19 @@ import { AvatarSection } from '../components/agent-settings/AvatarSection.tsx'
 import { ModelSection } from '../components/agent-settings/ModelSection.tsx'
 import { SkillsSection } from '../components/agent-settings/SkillsSection.tsx'
 import { PluginsSection } from '../components/agent-settings/PluginsSection.tsx'
+import { PlatformToolsSection } from '../components/agent-settings/PlatformToolsSection.tsx'
 import { PromptSection } from '../components/agent-settings/PromptSection.tsx'
 import { TerminateSection } from '../components/agent-settings/TerminateSection.tsx'
 import { SessionsSection } from '../components/agent-settings/SessionsSection.tsx'
 
-type Section = 'profile' | 'avatar' | 'model' | 'skills' | 'plugins' | 'prompt' | 'sessions' | 'terminate'
+type Section = 'profile' | 'avatar' | 'model' | 'skills' | 'platform-tools' | 'plugins' | 'prompt' | 'sessions' | 'terminate'
 
 const NAV_ITEMS: { id: Section; label: string; danger?: boolean }[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'avatar', label: 'Avatar' },
   { id: 'model', label: 'Model' },
   { id: 'skills', label: 'Skills' },
+  { id: 'platform-tools', label: 'Platform Tools' },
   { id: 'plugins', label: 'Plugins' },
   { id: 'prompt', label: 'System Prompt' },
   { id: 'sessions', label: 'Sessions' },
@@ -165,6 +167,7 @@ export default function AgentSettings() {
         {section === 'avatar' && <AvatarSection agent={agent} onSave={handleSave} />}
         {section === 'model' && <ModelSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
         {section === 'skills' && <SkillsSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
+        {section === 'platform-tools' && <PlatformToolsSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
         {section === 'plugins' && <PluginsSection agent={agent} onSave={handleSave as (data: { modelConfig: object }) => Promise<unknown>} />}
         {section === 'prompt' && id && <PromptSection agentId={id} />}
         {section === 'sessions' && id && <SessionsSection agentId={id} />}

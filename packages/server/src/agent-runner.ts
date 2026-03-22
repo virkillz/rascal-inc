@@ -14,6 +14,7 @@ import chalk from 'chalk'
 import { getAgentMemory, getAgentTodos, getAgentRoles, getSetting, getAllAgents, getBoardLanes, getAgentChannels } from './db.js'
 import { eventBus } from './event-bus.js'
 import { buildAgentTools } from './platform-tools.js'
+import { platformToolLoader } from './platform-tools/loader.js'
 import { pluginLoader } from './plugin-loader.js'
 
 let debugMode = false
@@ -37,6 +38,7 @@ export interface ModelConfig {
   modelId: string
   thinkingLevel?: string
   tools?: string[]
+  disabledTools?: string[]
   allowedSkills?: string[]
 }
 
@@ -140,58 +142,39 @@ export function buildSystemPrompt(agent: AgentRecord, workspaceDir: string): str
     ? `### Available Channels\n${channels.map((c: { id: string; name: string }) => `- #${c.name} (id: ${c.id})`).join('\n')}`
     : ''
 
-  // ── Plugin tools for this agent ─────────────────────────────────────────
-  let pluginToolsLines = ''
+  // ── Build toolsBlock from active platform tool groups + plugins ───────────
+  let agentToolIds: string[] = []
+  let disabledToolIds: string[] = []
   try {
-    const agentToolIds: string[] = JSON.parse(agent.model_config || '{}').tools ?? []
-    const dummyCtx = { agentId: agent.id, workspaceDir }
-    const pluginTools = pluginLoader.getToolsForIds(agentToolIds, dummyCtx)
-    if (pluginTools.length > 0) {
-      pluginToolsLines =
-        `\n\n## External Tools \n You also have these plugin tools available:\n` +
-        pluginTools.map((t) => `- ${t.name} — ${t.description}`).join('\n')
-    }
+    const mc = JSON.parse(agent.model_config || '{}')
+    agentToolIds = mc.tools ?? []
+    disabledToolIds = mc.disabledTools ?? []
   } catch {
-    // model_config parse failure — skip plugin tools
+    // model_config parse failure — use empty lists
+  }
+
+  // Active = defaults + explicitly enabled, minus explicitly disabled
+  const disabled = new Set(disabledToolIds)
+  const activeToolIds = new Set([
+    ...[...platformToolLoader.getDefaultToolIds()].filter(id => !disabled.has(id)),
+    ...agentToolIds.filter(id => !disabled.has(id)),
+  ])
+
+  const toolSections = platformToolLoader.getSystemPromptSections(activeToolIds)
+
+  // Append plugin tool descriptions if any are enabled
+  const dummyCtx = { agentId: agent.id, workspaceDir }
+  const pluginTools = pluginLoader.getToolsForIds(agentToolIds, dummyCtx)
+  if (pluginTools.length > 0) {
+    toolSections.push(
+      `### Plugin Tools\n` +
+      pluginTools.map((t) => `- ${t.name} — ${t.description}`).join('\n')
+    )
   }
 
   const toolsBlock =
-    `## How You Work\n\n` +
-    `As a virtual employee, here is how you operate.\n\n` +
-    `### Tasks\n` +
-    `All tasks in this organization are managed via a kanban board with cards. Use these tools to manage your work:\n` +
-    `- board_list_my_cards — list cards assigned to you; optionally filter by laneType (todo/in_progress/done)\n` +
-    `- board_create_card — create a card (auto-placed in Todo lane); use board_list_agents to get the assigneeId\n` +
-    `- board_update_card — update a card's title, description, result, or assignee by cardId\n` +
-    `- board_move_card — move a card to a different lane by cardId and laneId\n` +
-    `- board_list_agents — refresh the agent list mid-session if needed (pre-loaded in ## Team Members above)\n` +
-    `- board_list_lanes — refresh the lane list mid-session if needed (pre-loaded in ## Board Lanes above)\n\n` +
-    `### Deliverables\n` +
-    `When asked to do something, write your output into a file inside your workspace directory: ${workspaceDir}\n` +
-    `Prioritize dedicated workspace tools, but you can also use the built-in read/write/edit/bash tools.\n` +
-    `- workspace_read / workspace_write — read and write files in your workspace\n` +
-    `When you complete a task, update the card's result with what you did and include a link to the file you created or updated.\n\n` +
-    `### Communication\n` +
-    `You can proactively post messages to channels — don't wait to be mentioned. Use this to share updates, ask teammates for help, or announce completed work.\n` +
-    `- channel_list — list channels you are a member of (use this if ## Channels is empty or to refresh)\n` +
-    `- channel_get_messages — fetch the last 10 messages from a channel by channelId\n` +
-    `- channel_post — post a message to a channel by channelId\n\n` +
-    `### Direct Messages\n` +
-    `You can send a direct message to a human user (defaults to the workspace owner/admin).\n` +
-    `- send_direct_message — send a DM to a human user; omit user_id to message the workspace owner\n\n` +
-    `### Scheduling\n` +
-    `You can create recurring scheduled tasks for yourself using a cron expression.\n` +
-    `- create_schedule — create a recurring task with label, cron expression, and prompt\n` +
-    `  Common cron examples:\n` +
-    `    "0 11 * * *"   — every day at 11:00 AM UTC\n` +
-    `    "0 9 * * 1"    — every Monday at 9:00 AM UTC\n` +
-    `    "0 */4 * * *"  — every 4 hours\n` +
-    `  Example: to send a daily report, create a schedule whose prompt calls send_direct_message.\n\n` +
-    `### Personal Notes\n` +
-    `To be a good employee, you must remember things. Whenever you learn something worth remembering — especially related to work — write it to memory. If your task requires multi-step work you intend to continue, use your todo list.\n` +
-    `- memory_add — save important facts to your persistent memory (injected into future sessions)\n` +
-    `- todo_add / todo_complete — manage your task list (shown in your system prompt)` +
-    pluginToolsLines
+    `## How You Work\n\nAs a virtual employee, here is how you operate.\n\n` +
+    toolSections.join('\n\n')
 
   return [identityBlock, platformPrompt, roleBlock, sopBlock, toolsBlock, agentsBlock, lanesBlock, channelsBlock, memoryBlock, todoBlock]
     .filter(Boolean)
@@ -229,10 +212,8 @@ async function createLiveSession(
 
   // Build platform tools from the agent's declared tool list
   const toolIds: string[] = config.tools ?? []
-  const customTools = buildAgentTools(toolIds, {
-    agentId: agent.id,
-    workspaceDir,
-  })
+  const disabledTools: string[] = config.disabledTools ?? []
+  const customTools = buildAgentTools(toolIds, { agentId: agent.id, workspaceDir }, disabledTools)
 
   const allowedSkills: string[] | undefined = config.allowedSkills
 

@@ -9,6 +9,7 @@ import { setUserAvatarsDir } from './api/users.js'
 import { setEnvFilePath } from './api/settings.js'
 import { setPluginsEnvFilePath, seedBuiltInPlugins } from './api/plugins.js'
 import { pluginLoader } from './plugin-loader.js'
+import { platformToolLoader } from './platform-tools/loader.js'
 import { startServer } from './server.js'
 import { startScheduler } from './scheduler.js'
 
@@ -84,6 +85,8 @@ async function cmdStart() {
   setUserAvatarsDir(path.join(DATA_DIR, 'user_avatars'))
   setEnvFilePath(ENV_FILE)
   setPluginsEnvFilePath(ENV_FILE)
+  // Initialize platform tool loader
+  platformToolLoader.init()
   // Initialize plugin loader — must run after env vars are loaded and DB is ready
   pluginLoader.setWorkspaceDir(WORKSPACE_DIR)
   pluginLoader.init()
